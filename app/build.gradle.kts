@@ -10,10 +10,13 @@ plugins {
 val webDir = rootProject.layout.projectDirectory.dir("web")
 val webAssets = layout.buildDirectory.dir("generated/web-assets")
 
+val isWindows = System.getProperty("os.name").lowercase().contains("windows")
+val npmExecutable = if (isWindows) "npm.cmd" else "npm"
+
 val npmInstall by tasks.registering(Exec::class) {
     description = "Installs the web UI's npm packages."
     workingDir = webDir.asFile
-    commandLine("npm", "ci", "--no-audit", "--no-fund")
+    commandLine(npmExecutable, "ci", "--no-audit", "--no-fund")
     inputs.file(webDir.file("package-lock.json"))
     outputs.dir(webDir.dir("node_modules"))
 }
@@ -22,7 +25,7 @@ val buildWeb by tasks.registering(Exec::class) {
     description = "Builds the web UI (Three.js scene, panel and editor) with Vite."
     dependsOn(npmInstall)
     workingDir = webDir.asFile
-    commandLine("npm", "run", "build")
+    commandLine(npmExecutable, "run", "build")
     inputs.dir(webDir.dir("src"))
     inputs.dir(webDir.dir("public"))
     inputs.files(webDir.file("index.html"), webDir.file("vite.config.js"), webDir.file("package-lock.json"))
