@@ -1,0 +1,30 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 48 48" width="48" height="48">
+  <defs>
+    <linearGradient id="lumionGrad" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#00E5FF"/>
+      <stop offset="100%" stop-color="#0070F3"/>
+    </linearGradient>
+    <filter id="glow" x="-20%" y="-20%" width="140%" height="140%">
+      <feGaussianBlur stdDeviation="2" result="blur"/>
+      <feComposite in="SourceGraphic" in2="blur" operator="over"/>
+    </filter>
+  </defs>
+
+  <!-- Background rounded plate -->
+  <rect x="3" y="3" width="42" height="42" rx="10" fill="#151A24" stroke="url(#lumionGrad)" stroke-width="2.5"/>
+
+  <!-- Isometric 3D Cube / Library Structure -->
+  <g filter="url(#glow)">
+    <!-- Top Face -->
+    <polygon points="24,10 38,18 24,26 10,18" fill="url(#lumionGrad)"/>
+    <!-- Left Face -->
+    <polygon points="10,18 24,26 24,38 10,30" fill="#0070F3" opacity="0.85"/>
+    <!-- Right Face -->
+    <polygon points="38,18 24,26 24,38 38,30" fill="#00E5FF" opacity="0.6"/>
+  </g>
+
+  <!-- Lumion Accent Dots -->
+  <circle cx="24" cy="21" r="2.5" fill="#FFFFFF"/>
+  <circle cx="17" cy="27" r="1.5" fill="#FFFFFF" opacity="0.8"/>
+  <circle cx="31" cy="27" r="1.5" fill="#FFFFFF" opacity="0.8"/>
+</svg>

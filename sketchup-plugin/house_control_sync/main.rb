@@ -6,6 +6,7 @@ module HouseControlSync
   require_relative 'builder'
   require_relative 'importer'
   require_relative 'exporter'
+  require_relative 'catalog'
 
   # Herramienta para suavizar / redondear aristas (Phong / Gouraud shading)
   def self.smooth_selection(smooth = true)
@@ -64,12 +65,13 @@ module HouseControlSync
     current_cat = ent.get_attribute('HouseControl', 'category') || 'furniture'
     current_type = ent.get_attribute('HouseControl', 'type') || 'sofa'
     current_room = ent.get_attribute('HouseControl', 'room') || 'living'
-    current_name = ent.get_attribute('HouseControl', 'name') || ent.name.ifEmpty { 'Nuevo Elemento' }
+    current_name = ent.get_attribute('HouseControl', 'name') || ent.name
+    current_name = 'Nuevo Elemento' if current_name.nil? || current_name.empty?
 
     prompts = ['Categoría:', 'Tipo:', 'Nombre:', 'Habitación (ID):']
     defaults = [current_cat, current_type, current_name, current_room]
     list_cat = 'furniture|light|ac|room'
-    list_type = 'sofa|armchair|coffeeTable|tv|diningSet|kitchen|island|fridge|bed|nightstand|dresser|plant|vanity|bathtub|toilet|desk|wardrobe|bookshelf|rug|custom|ceiling|pendant|spots|floor|table|strip'
+    list_type = 'sofa|sofa_l|armchair|coffeeTable|side_table|tv|diningSet|dining_round|desk|office_chair|kitchen|island|fridge|bar_stool|bed|bed_queen|bed_single|nightstand|dresser|plant|ficus|vanity|bathtub|shower|toilet|wardrobe|bookshelf|rug|car_sedan|car_suv|ceiling|pendant|spots|floor|table|strip|wall_sconce|custom'
 
     input = UI.inputbox(prompts, defaults, [list_cat, list_type, '', ''], 'Convertir a Elemento House Control')
     return unless input
@@ -84,7 +86,6 @@ module HouseControlSync
     ent.set_attribute('HouseControl', 'room', room)
     ent.set_attribute('HouseControl', 'id', "#{room}.#{type}_#{rand(1000..9999)}")
 
-    # Asignar a la capa correspondiente
     layer_name = case cat
                  when 'furniture' then 'HC_Muebles'
                  when 'light' then 'HC_Luces'
@@ -108,27 +109,27 @@ module HouseControlSync
     end
 
     ent = sel.first
-    cat = ent.get_attribute('HouseControl', 'category') || Exporter.infer_category_from_layer(ent)
+    cat = Exporter.get_hc_attr(ent, 'category') || Exporter.infer_category_from_layer(ent)
     unless cat
       UI.messagebox("El elemento seleccionado no tiene datos de House Control ni está en una capa HC.")
       return
     end
 
-    id = ent.get_attribute('HouseControl', 'id') || '-'
-    name = ent.get_attribute('HouseControl', 'name') || ent.name
-    room = ent.get_attribute('HouseControl', 'room') || '-'
-    type = ent.get_attribute('HouseControl', 'type') || '-'
-    link = ent.get_attribute('HouseControl', 'link')
-    tuya = ent.get_attribute('HouseControl', 'tuya')
+    id = Exporter.get_hc_attr(ent, 'id') || '-'
+    name = Exporter.get_hc_attr(ent, 'name') || ent.name
+    room = Exporter.get_hc_attr(ent, 'room') || '-'
+    type = Exporter.get_hc_attr(ent, 'type') || '-'
+    link = Exporter.get_hc_attr(ent, 'link')
+    tuya = Exporter.get_hc_attr(ent, 'tuya')
 
     pos = ent.transformation.origin
     px = pos.x.to_m.round(2)
     pz = (-pos.y).to_m.round(2)
     py = pos.z.to_m.round(2)
 
-    device_info = if tuya && !tuya.empty?
+    device_info = if tuya && !tuya.to_s.empty?
                     "Smart Life / Tuya: #{tuya}"
-                  elsif link && !link.empty?
+                  elsif link && !link.to_s.empty?
                     "Enlace: #{link}"
                   else
                     "Sin dispositivo físico (Simulado)"
@@ -161,21 +162,37 @@ module HouseControlSync
 
   # Registrar Menús y Barra de Herramientas en SketchUp
   unless file_loaded?(__FILE__)
+    icons_dir = File.join(File.dirname(__FILE__), 'icons')
+
     menu = UI.menu('Plugins') || UI.menu('Extensions')
     hc_menu = menu.add_submenu('House Control 3D')
 
+    # 1. Catálogo Lumion (Comando Principal)
+    cmd_catalog = UI::Command.new('Catálogo de Objetos y Materiales (Estilo Lumion)...') {
+      Catalog.show_dialog
+    }
+    cmd_catalog.tooltip = 'Catálogo 3D Lumion: Insertar mobiliario, iluminación, climas y materiales con 1 clic'
+    cmd_catalog.status_bar_text = 'Abre la biblioteca interactiva 3D estilo Lumion para colocar objetos y aplicar materiales'
+    icon_16 = File.join(icons_dir, 'catalog_16.png')
+    icon_24 = File.join(icons_dir, 'catalog_24.png')
+    cmd_catalog.small_icon = icon_16 if File.exist?(icon_16)
+    cmd_catalog.large_icon = icon_24 if File.exist?(icon_24)
+
+    # 2. Importar Plano
     cmd_import = UI::Command.new('Importar Plano House Control (*.json)...') {
       Importer.prompt_and_import(Sketchup.active_model)
     }
     cmd_import.tooltip = 'Importar plano JSON (Z corregido hacia arriba y muebles suavizados)'
     cmd_import.status_bar_text = 'Importa un archivo plan.json a SketchUp en coordenadas positivas'
 
+    # 3. Exportar Plano
     cmd_export = UI::Command.new('Exportar a House Control (*.json)...') {
       Exporter.prompt_and_export(Sketchup.active_model)
     }
     cmd_export.tooltip = 'Exportar modelo 3D actual a formato plan.json de House Control'
     cmd_export.status_bar_text = 'Exporta el modelo actual manteniendo vinculaciones y materiales'
 
+    # 4. Herramientas de Aristas
     cmd_smooth = UI::Command.new('Suavizar / Redondear Aristas...') {
       smooth_selection(true)
     }
@@ -186,6 +203,7 @@ module HouseControlSync
     }
     cmd_sharp.tooltip = 'Restaurar aristas rectas y vivas en el objeto seleccionado'
 
+    # 5. Convertidor e Inspector
     cmd_convert = UI::Command.new('Convertir Selección a Objeto House Control...') {
       convert_selection_dialog
     }
@@ -200,6 +218,9 @@ module HouseControlSync
       open_samples_folder
     }
 
+    # Menú desplegable
+    hc_menu.add_item(cmd_catalog)
+    hc_menu.add_separator
     hc_menu.add_item(cmd_import)
     hc_menu.add_item(cmd_export)
     hc_menu.add_separator
@@ -213,8 +234,11 @@ module HouseControlSync
 
     # Barra de herramientas (Toolbar)
     tb = UI::Toolbar.new('House Control 3D')
+    tb.add_item(cmd_catalog)
+    tb.add_separator
     tb.add_item(cmd_import)
     tb.add_item(cmd_export)
+    tb.add_separator
     tb.add_item(cmd_smooth)
     tb.add_item(cmd_convert)
     tb.add_item(cmd_inspect)

@@ -11,6 +11,14 @@ module HouseControlSync
       export_file(model, file)
     end
 
+    def self.get_hc_attr(ent, key)
+      val = ent.get_attribute('HouseControl', key)
+      if val.nil? && ent.respond_to?(:definition)
+        val = ent.definition.get_attribute('HouseControl', key)
+      end
+      val
+    end
+
     def self.export_file(model, filepath)
       plan = {}
 
@@ -36,13 +44,9 @@ module HouseControlSync
 
       # Recorrer entidades en el modelo buscando elementos de House Control o por Tags
       find_all_relevant_entities(model.active_entities).each do |ent|
-        cat = ent.get_attribute('HouseControl', 'category')
-        # Si no tiene atributo pero está en una capa de House Control, inferir categoría
-        unless cat
-          cat = infer_category_from_layer(ent)
-        end
+        cat = get_hc_attr(ent, 'category') || infer_category_from_layer(ent)
 
-        raw_str = ent.get_attribute('HouseControl', 'raw_json')
+        raw_str = get_hc_attr(ent, 'raw_json')
         raw_data = raw_str ? (JSON.parse(raw_str) rescue {}) : {}
 
         case cat
@@ -54,20 +58,20 @@ module HouseControlSync
           rd = bb.height.to_m.round(2)
 
           item = raw_data.dup
-          item['id'] = (ent.get_attribute('HouseControl', 'id') || item['id'] || "room_#{rooms.size + 1}").to_s
-          item['name'] = (ent.get_attribute('HouseControl', 'name') || item['name'] || item['id']).to_s
+          item['id'] = (get_hc_attr(ent, 'id') || item['id'] || "room_#{rooms.size + 1}").to_s
+          item['name'] = (get_hc_attr(ent, 'name') || item['name'] || item['id']).to_s
 
           # Detectar si el usuario pintó el piso con un nuevo material en SketchUp
           mat_floor = Materials.detect_floor_type(ent.material)
-          item['floor'] = (ent.get_attribute('HouseControl', 'floor') || mat_floor || 'oak').to_s
+          item['floor'] = (get_hc_attr(ent, 'floor') || mat_floor || 'oak').to_s
           item['rect'] = [rx, rz, rw, rd]
           rooms << item
 
         when 'opening'
           item = raw_data.dup
-          item['type'] = (ent.get_attribute('HouseControl', 'type') || item['type'] || 'door').to_s
-          item['sill'] = (ent.get_attribute('HouseControl', 'sill') || item['sill'] || 0.85).to_f
-          item['head'] = (ent.get_attribute('HouseControl', 'head') || item['head'] || 2.10).to_f
+          item['type'] = (get_hc_attr(ent, 'type') || item['type'] || 'door').to_s
+          item['sill'] = (get_hc_attr(ent, 'sill') || item['sill'] || 0.85).to_f
+          item['head'] = (get_hc_attr(ent, 'head') || item['head'] || 2.10).to_f
           openings << item
 
         when 'furniture'
@@ -79,13 +83,19 @@ module HouseControlSync
           rot_deg = extract_rotation_degrees(tr)
 
           item = raw_data.dup
-          item['type'] = (ent.get_attribute('HouseControl', 'type') || item['type'] || 'sofa').to_s
+          item['type'] = (get_hc_attr(ent, 'type') || item['type'] || 'sofa').to_s
           item['pos'] = [pos_x, pos_z]
           item['rot'] = rot_deg if rot_deg != 0
           item['y'] = pos_y if pos_y > 0.02
 
+          # Dimensiones si fueron personalizadas
+          w = get_hc_attr(ent, 'width')
+          d = get_hc_attr(ent, 'depth')
+          h = get_hc_attr(ent, 'height')
+          item['size'] = [w.to_f, d.to_f] if w && d
+
           # Si el arquitecto aplicó un material/color personalizado en SketchUp
-          custom_color = Materials.extract_hex(ent.material)
+          custom_color = Materials.extract_hex(ent.material) || get_hc_attr(ent, 'color')
           item['color'] = custom_color if custom_color
 
           furniture << item
@@ -97,27 +107,29 @@ module HouseControlSync
           rot_deg = extract_rotation_degrees(tr)
 
           item = raw_data.dup
-          item['id'] = (ent.get_attribute('HouseControl', 'id') || item['id'] || "light_#{lights.size + 1}").to_s
-          item['name'] = (ent.get_attribute('HouseControl', 'name') || item['name'] || item['id']).to_s
-          item['room'] = (ent.get_attribute('HouseControl', 'room') || item['room'] || 'living').to_s
-          item['type'] = (ent.get_attribute('HouseControl', 'type') || item['type'] || 'ceiling').to_s
+          item['id'] = (get_hc_attr(ent, 'id') || item['id'] || "light_#{lights.size + 1}").to_s
+          item['name'] = (get_hc_attr(ent, 'name') || item['name'] || item['id']).to_s
+          item['room'] = (get_hc_attr(ent, 'room') || item['room'] || 'living').to_s
+          item['type'] = (get_hc_attr(ent, 'type') || item['type'] || 'ceiling').to_s
           item['pos'] = [pos_x, pos_z]
           item['rot'] = rot_deg if rot_deg != 0
 
           # Mantener la elevación Y original o leer la de la geometría
-          saved_y = ent.get_attribute('HouseControl', 'y')
+          saved_y = get_hc_attr(ent, 'y')
           item['y'] = saved_y.to_f if saved_y
 
-          caps_raw = ent.get_attribute('HouseControl', 'capabilities')
+          caps_raw = get_hc_attr(ent, 'capabilities')
           item['capabilities'] = JSON.parse(caps_raw) if caps_raw && !caps_raw.empty? rescue item['capabilities']
 
-          link_raw = ent.get_attribute('HouseControl', 'link')
+          link_raw = get_hc_attr(ent, 'link')
           item['link'] = JSON.parse(link_raw) if link_raw && !link_raw.empty? rescue item['link']
 
-          tuya_raw = ent.get_attribute('HouseControl', 'tuya')
-          item['tuya'] = JSON.parse(tuya_raw) if tuya_raw && !tuya_raw.empty? rescue item['tuya']
+          tuya_raw = get_hc_attr(ent, 'tuya')
+          if tuya_raw && !tuya_raw.to_s.empty?
+            item['tuya'] = (tuya_raw.is_a?(String) && tuya_raw.start_with?('{')) ? (JSON.parse(tuya_raw) rescue tuya_raw) : tuya_raw
+          end
 
-          custom_color = Materials.extract_hex(ent.material)
+          custom_color = Materials.extract_hex(ent.material) || get_hc_attr(ent, 'color')
           item['color'] = custom_color if custom_color
 
           lights << item
@@ -128,20 +140,22 @@ module HouseControlSync
           pos_z = (-tr.origin.y).to_m.round(2)
 
           item = raw_data.dup
-          item['id'] = (ent.get_attribute('HouseControl', 'id') || item['id'] || "ac_#{acs.size + 1}").to_s
-          item['name'] = (ent.get_attribute('HouseControl', 'name') || item['name'] || item['id']).to_s
-          item['room'] = (ent.get_attribute('HouseControl', 'room') || item['room'] || 'living').to_s
-          item['wall'] = (ent.get_attribute('HouseControl', 'wall') || item['wall'] || 'north').to_s
+          item['id'] = (get_hc_attr(ent, 'id') || item['id'] || "ac_#{acs.size + 1}").to_s
+          item['name'] = (get_hc_attr(ent, 'name') || item['name'] || item['id']).to_s
+          item['room'] = (get_hc_attr(ent, 'room') || item['room'] || 'living').to_s
+          item['wall'] = (get_hc_attr(ent, 'wall') || item['wall'] || 'north').to_s
           item['pos'] = [pos_x, pos_z]
-          item['y'] = (ent.get_attribute('HouseControl', 'y') || item['y'] || 2.2).to_f
+          item['y'] = (get_hc_attr(ent, 'y') || item['y'] || 2.2).to_f
 
-          link_raw = ent.get_attribute('HouseControl', 'link')
+          link_raw = get_hc_attr(ent, 'link')
           item['link'] = JSON.parse(link_raw) if link_raw && !link_raw.empty? rescue item['link']
 
-          tuya_raw = ent.get_attribute('HouseControl', 'tuya')
-          item['tuya'] = JSON.parse(tuya_raw) if tuya_raw && !tuya_raw.empty? rescue item['tuya']
+          tuya_raw = get_hc_attr(ent, 'tuya')
+          if tuya_raw && !tuya_raw.to_s.empty?
+            item['tuya'] = (tuya_raw.is_a?(String) && tuya_raw.start_with?('{')) ? (JSON.parse(tuya_raw) rescue tuya_raw) : tuya_raw
+          end
 
-          sensor_raw = ent.get_attribute('HouseControl', 'sensor')
+          sensor_raw = get_hc_attr(ent, 'sensor')
           item['sensor'] = JSON.parse(sensor_raw) if sensor_raw && !sensor_raw.empty? rescue item['sensor']
 
           acs << item
@@ -178,7 +192,7 @@ module HouseControlSync
       results = []
       entities.each do |e|
         next unless e.is_a?(Sketchup::Group) || e.is_a?(Sketchup::ComponentInstance)
-        if e.get_attribute('HouseControl', 'category') || infer_category_from_layer(e)
+        if get_hc_attr(e, 'category') || infer_category_from_layer(e)
           results << e
         else
           sub_ents = e.is_a?(Sketchup::Group) ? e.entities : e.definition.entities
