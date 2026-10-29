@@ -42,7 +42,7 @@ data class Banner(val kind: Kind, val text: String, val id: Long = System.nanoTi
 
 /** Where the settings open, and the connection screens the editor opens over itself. */
 enum class Route {
-    Pairing, SmartLife, Shortcuts, HomeAssistant, Hue, Devices;
+    Pairing, SmartLife, Shortcuts, HomeAssistant, Hue, Devices, CloudSync;
 
     companion object {
         /** The screen a connection id of the web editor ("smartlife", "hue"…) stands for. */
@@ -381,9 +381,73 @@ class AppModel(private val context: Context) {
 
     fun fileExported(ok: Boolean) {
         fileRequest = null
-        val message = editorPending ?: return
+        val message = editorPending
+        if (message != null) {
+            editorPending = null
+            editorWeb?.reply(message, if (ok) jsonOf("ok" to true) else jsonOf("cancelled" to true))
+        } else if (ok) {
+            show(Banner(Banner.Kind.Success, "Plano exportado con éxito"))
+        }
+    }
+
+    /** Exporta el plano actual solicitando la ubicación al usuario (SAF) */
+    fun requestExport(suggestedName: String? = null) {
+        val plan = currentPlan ?: return
+        val baseName = (suggestedName ?: plan.optString("name").ifEmpty { "Home" }).replace(" ", "_")
         editorPending = null
-        editorWeb?.reply(message, if (ok) jsonOf("ok" to true) else jsonOf("cancelled" to true))
+        fileRequest = FileRequest.Export(PlanStore.encode(plan), baseName)
+    }
+
+    /** Exporta específicamente para el plugin de SketchUp Sync */
+    fun requestExportForSketchUp() {
+        val plan = currentPlan ?: return
+        val baseName = (plan.optString("name").ifEmpty { "Home" } + "-sketchup").replace(" ", "_")
+        editorPending = null
+        fileRequest = FileRequest.Export(PlanStore.encode(plan), baseName)
+    }
+
+    /** Guarda una copia local en Documents/HouseControl en la memoria accesible del teléfono */
+    fun saveLocalBackup(): File? {
+        val plan = currentPlan ?: return null
+        return try {
+            val baseDir = context.getExternalFilesDir(android.os.Environment.DIRECTORY_DOCUMENTS) 
+                ?: File(context.filesDir, "HouseControl")
+            val dir = File(baseDir, "HouseControl")
+            dir.mkdirs()
+            val name = (plan.optString("name").ifEmpty { "Home" }).replace(" ", "_")
+            val file = File(dir, "$name.json")
+            file.writeBytes(PlanStore.encode(plan))
+            show(Banner(Banner.Kind.Success, "Copia guardada: ${file.name}"))
+            file
+        } catch (e: Exception) {
+            show(Banner(Banner.Kind.Error, "Error al guardar localmente: ${e.readable}"))
+            null
+        }
+    }
+
+    /** Comparte el archivo del plano actual con Google Drive, OneDrive, Dropbox, WhatsApp, etc. */
+    fun shareCurrentPlan(context: Context) {
+        val plan = currentPlan ?: return
+        try {
+            val cacheDir = File(context.cacheDir, "shared")
+            cacheDir.mkdirs()
+            val name = (plan.optString("name").ifEmpty { "Home" }).replace(" ", "_") + "-sketchup.json"
+            val file = File(cacheDir, name)
+            file.writeBytes(PlanStore.encode(plan))
+            val uri = androidx.core.content.FileProvider.getUriForFile(context, "${context.packageName}.files", file)
+            val shareIntent = android.content.Intent(android.content.Intent.ACTION_SEND).apply {
+                type = "application/json"
+                putExtra(android.content.Intent.EXTRA_STREAM, uri)
+                putExtra(android.content.Intent.EXTRA_SUBJECT, "Plano House Control 3D - $name")
+                putExtra(android.content.Intent.EXTRA_TEXT, "Plano 3D para House Control y SketchUp Sync.")
+                addFlags(android.content.Intent.FLAG_GRANT_READ_URI_PERMISSION)
+            }
+            val chooser = android.content.Intent.createChooser(shareIntent, "Guardar en Nube o Compartir Plano")
+            chooser.addFlags(android.content.Intent.FLAG_ACTIVITY_NEW_TASK)
+            context.startActivity(chooser)
+        } catch (e: Exception) {
+            show(Banner(Banner.Kind.Error, "No se pudo compartir el archivo: ${e.readable}"))
+        }
     }
 
     /** A connection screen opened from the editor was closed: the editor's lists follow. */

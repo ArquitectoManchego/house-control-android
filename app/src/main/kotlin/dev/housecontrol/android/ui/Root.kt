@@ -166,6 +166,7 @@ private fun RouteScreen(model: AppModel, route: Route, insideEditor: Boolean, op
         Route.HomeAssistant -> HomeAssistantScreen(model, insideEditor, open, back)
         Route.Hue -> HueScreen(model, insideEditor, open, back)
         Route.Devices -> DevicesScreen(model, back)
+        Route.CloudSync -> CloudSyncScreen(model, back)
     }
 }
 

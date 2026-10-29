@@ -2,4 +2,6 @@
 <!-- Files handed to other apps: an exported floor plan, the Smart Life sign-in code. -->
 <paths>
     <cache-path name="shared" path="shared/" />
+    <files-path name="internal_files" path="." />
+    <external-files-path name="external_files" path="." />
 </paths>

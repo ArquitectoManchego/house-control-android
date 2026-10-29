@@ -97,10 +97,16 @@ private fun HomeSection(model: AppModel, open: (Route) -> Unit) {
             LinkRow(R.drawable.lucide_link_2, "Devices",
                 if (model.linkedDevices == 0) "Link the plan to your real devices" else "${model.linkedDevices} linked to real devices",
                 Palette.green) { open(Route.Devices) }
+            RowDivider()
+            LinkRow(R.drawable.lucide_cloud, "Nube y Copias de Seguridad", "Google Drive, OneDrive, Dropbox & Local",
+                Palette.accent) { open(Route.CloudSync) }
         }
         Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
             SecondaryButton("New home", Modifier.weight(1f), R.drawable.lucide_plus) { model.showNewHome = true }
             SecondaryButton("Import file", Modifier.weight(1f), R.drawable.lucide_download) { model.requestImport() }
+        }
+        PrimaryButton("Exportar para SketchUp Sync", Modifier.fillMaxWidth(), R.drawable.lucide_upload) {
+            model.requestExportForSketchUp()
         }
         if (!model.hasCustomPlan) {
             Footnote("Make your own home here, or pair with House Control on a Mac or PC and the one drawn there arrives by itself.")
