@@ -14,7 +14,7 @@ module HouseControlSync
     def self.export_file(model, filepath)
       plan = {}
 
-      # Metadatos del Modelo
+      # Metadatos generales del Modelo
       plan['version'] = (model.get_attribute('HouseControl', 'version') || 1).to_i
       plan['name'] = (model.get_attribute('HouseControl', 'name') || 'Home').to_s
       plan['wallHeight'] = (model.get_attribute('HouseControl', 'wallHeight') || 2.6).to_f
@@ -25,9 +25,8 @@ module HouseControlSync
       el = (model.get_attribute('HouseControl', 'camera_elevation') || 47).to_f
       plan['camera'] = { 'azimuth' => az, 'elevation' => el }
 
-      # Escenas guardadas
       scenes_raw = model.get_attribute('HouseControl', 'scenes_json')
-      plan['scenes'] = scenes_raw ? JSON.parse(scenes_raw) : []
+      plan['scenes'] = scenes_raw ? (JSON.parse(scenes_raw) rescue []) : []
 
       rooms = []
       openings = []
@@ -35,9 +34,14 @@ module HouseControlSync
       lights = []
       acs = []
 
-      # Recorrer entidades buscando elementos con diccionario 'HouseControl'
-      find_house_control_entities(model.active_entities).each do |ent|
+      # Recorrer entidades en el modelo buscando elementos de House Control o por Tags
+      find_all_relevant_entities(model.active_entities).each do |ent|
         cat = ent.get_attribute('HouseControl', 'category')
+        # Si no tiene atributo pero está en una capa de House Control, inferir categoría
+        unless cat
+          cat = infer_category_from_layer(ent)
+        end
+
         raw_str = ent.get_attribute('HouseControl', 'raw_json')
         raw_data = raw_str ? (JSON.parse(raw_str) rescue {}) : {}
 
@@ -52,7 +56,10 @@ module HouseControlSync
           item = raw_data.dup
           item['id'] = (ent.get_attribute('HouseControl', 'id') || item['id'] || "room_#{rooms.size + 1}").to_s
           item['name'] = (ent.get_attribute('HouseControl', 'name') || item['name'] || item['id']).to_s
-          item['floor'] = (ent.get_attribute('HouseControl', 'floor') || item['floor'] || 'oak').to_s
+
+          # Detectar si el usuario pintó el piso con un nuevo material en SketchUp
+          mat_floor = Materials.detect_floor_type(ent.material)
+          item['floor'] = (ent.get_attribute('HouseControl', 'floor') || mat_floor || 'oak').to_s
           item['rect'] = [rx, rz, rw, rd]
           rooms << item
 
@@ -69,33 +76,38 @@ module HouseControlSync
           pos_z = (-tr.origin.y).to_m.round(2)
           pos_y = tr.origin.z.to_m.round(2)
 
-          # Calcular rotación en grados
           rot_deg = extract_rotation_degrees(tr)
 
           item = raw_data.dup
           item['type'] = (ent.get_attribute('HouseControl', 'type') || item['type'] || 'sofa').to_s
           item['pos'] = [pos_x, pos_z]
           item['rot'] = rot_deg if rot_deg != 0
-          item['y'] = pos_y if pos_y > 0.01
+          item['y'] = pos_y if pos_y > 0.02
+
+          # Si el arquitecto aplicó un material/color personalizado en SketchUp
+          custom_color = Materials.extract_hex(ent.material)
+          item['color'] = custom_color if custom_color
+
           furniture << item
 
         when 'light'
           tr = ent.transformation
           pos_x = tr.origin.x.to_m.round(2)
           pos_z = (-tr.origin.y).to_m.round(2)
-          pos_y = tr.origin.z.to_m.round(2)
           rot_deg = extract_rotation_degrees(tr)
 
           item = raw_data.dup
-          item['id'] = (ent.get_attribute('HouseControl', 'id') || item['id']).to_s
+          item['id'] = (ent.get_attribute('HouseControl', 'id') || item['id'] || "light_#{lights.size + 1}").to_s
           item['name'] = (ent.get_attribute('HouseControl', 'name') || item['name'] || item['id']).to_s
           item['room'] = (ent.get_attribute('HouseControl', 'room') || item['room'] || 'living').to_s
           item['type'] = (ent.get_attribute('HouseControl', 'type') || item['type'] || 'ceiling').to_s
           item['pos'] = [pos_x, pos_z]
-          item['y'] = pos_y if pos_y > 0.01
           item['rot'] = rot_deg if rot_deg != 0
 
-          # Restaurar capacidades y vinculaciones de dispositivo
+          # Mantener la elevación Y original o leer la de la geometría
+          saved_y = ent.get_attribute('HouseControl', 'y')
+          item['y'] = saved_y.to_f if saved_y
+
           caps_raw = ent.get_attribute('HouseControl', 'capabilities')
           item['capabilities'] = JSON.parse(caps_raw) if caps_raw && !caps_raw.empty? rescue item['capabilities']
 
@@ -105,21 +117,23 @@ module HouseControlSync
           tuya_raw = ent.get_attribute('HouseControl', 'tuya')
           item['tuya'] = JSON.parse(tuya_raw) if tuya_raw && !tuya_raw.empty? rescue item['tuya']
 
+          custom_color = Materials.extract_hex(ent.material)
+          item['color'] = custom_color if custom_color
+
           lights << item
 
         when 'ac'
           tr = ent.transformation
           pos_x = tr.origin.x.to_m.round(2)
           pos_z = (-tr.origin.y).to_m.round(2)
-          pos_y = tr.origin.z.to_m.round(2)
 
           item = raw_data.dup
-          item['id'] = (ent.get_attribute('HouseControl', 'id') || item['id']).to_s
+          item['id'] = (ent.get_attribute('HouseControl', 'id') || item['id'] || "ac_#{acs.size + 1}").to_s
           item['name'] = (ent.get_attribute('HouseControl', 'name') || item['name'] || item['id']).to_s
           item['room'] = (ent.get_attribute('HouseControl', 'room') || item['room'] || 'living').to_s
           item['wall'] = (ent.get_attribute('HouseControl', 'wall') || item['wall'] || 'north').to_s
           item['pos'] = [pos_x, pos_z]
-          item['y'] = pos_y if pos_y > 0.01
+          item['y'] = (ent.get_attribute('HouseControl', 'y') || item['y'] || 2.2).to_f
 
           link_raw = ent.get_attribute('HouseControl', 'link')
           item['link'] = JSON.parse(link_raw) if link_raw && !link_raw.empty? rescue item['link']
@@ -134,38 +148,61 @@ module HouseControlSync
         end
       end
 
-      # Si no se encontraron por búsqueda individual, cargar los respaldos para no perder listas vacías
-      plan['rooms'] = rooms.empty? ? (JSON.parse(model.get_attribute('HouseControl', 'raw_plan_json'))['rooms'] rescue []) : rooms
+      # Si no hay habitaciones registradas dinámicamente, conservar respaldo
+      if rooms.empty?
+        raw_rooms = JSON.parse(model.get_attribute('HouseControl', 'raw_plan_json'))['rooms'] rescue []
+        plan['rooms'] = raw_rooms
+      else
+        plan['rooms'] = rooms
+      end
+
       plan['openings'] = openings.empty? ? (JSON.parse(model.get_attribute('HouseControl', 'raw_plan_json'))['openings'] rescue []) : openings
       plan['furniture'] = furniture
       plan['lights'] = lights
       plan['acs'] = acs
 
-      # Serializar JSON con indentación limpia
+      # Serializar JSON limpio
       json_output = JSON.pretty_generate(plan)
       File.write(filepath, json_output, encoding: 'UTF-8')
 
-      UI.messagebox("¡Plano exportado con éxito a:\n#{filepath}\n\n" +
+      UI.messagebox("¡Plano exportado exitosamente para House Control!\n\n" +
+                    "Archivo: #{File.basename(filepath)}\n" +
                     "• Habitaciones: #{plan['rooms'].size}\n" +
                     "• Muebles: #{plan['furniture'].size}\n" +
                     "• Luces: #{plan['lights'].size}\n" +
-                    "• Climas (AC): #{plan['acs'].size}\n\n" +
-                    "Ya puedes importar este archivo directamente en la app House Control de tu celular.")
+                    "• Climas: #{plan['acs'].size}\n\n" +
+                    "Puedes transferir este archivo a tu celular e importarlo en la app House Control.")
     end
 
-    def self.find_house_control_entities(entities)
+    def self.find_all_relevant_entities(entities)
       results = []
       entities.each do |e|
         next unless e.is_a?(Sketchup::Group) || e.is_a?(Sketchup::ComponentInstance)
-        if e.get_attribute('HouseControl', 'category')
+        if e.get_attribute('HouseControl', 'category') || infer_category_from_layer(e)
           results << e
         else
-          # Explorar recursivamente si es un grupo contenedor
           sub_ents = e.is_a?(Sketchup::Group) ? e.entities : e.definition.entities
-          results.concat(find_house_control_entities(sub_ents))
+          results.concat(find_all_relevant_entities(sub_ents))
         end
       end
       results
+    end
+
+    def self.infer_category_from_layer(entity)
+      layer_name = entity.layer.name.to_s.downcase
+      if layer_name.include?('piso') || layer_name.include?('room')
+        'room'
+      elsif layer_name.include?('mueble') || layer_name.include?('furn')
+        'furniture'
+      elsif layer_name.include?('luz') || layer_name.include?('light') || layer_name.include?('lamp')
+        'light'
+      elsif layer_name.include?('clima') || layer_name.include?('ac') || layer_name.include?('aire')
+        'ac'
+      elsif layer_name.include?('abertura') || layer_name.include?('open') || layer_name.include?('puerta') || layer_name.include?('ventana')
+        'opening'
+      else
+        nil
+      end
     end
 
     def self.extract_rotation_degrees(transformation)

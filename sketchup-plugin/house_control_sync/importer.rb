@@ -21,7 +21,7 @@ module HouseControlSync
 
       model.start_operation('Importar Plano House Control', true)
 
-      # Asegurar Tags / Capas de organización
+      # Asegurar Tags / Capas de organización arquitectónica en SketchUp
       tag_pisos     = get_or_create_layer(model, 'HC_Pisos')
       tag_paredes   = get_or_create_layer(model, 'HC_Paredes')
       tag_aberturas = get_or_create_layer(model, 'HC_Aberturas')
@@ -59,7 +59,7 @@ module HouseControlSync
         rw = room['rect'][2].to_f.m
         rd = room['rect'][3].to_f.m
 
-        # 4 puntos del suelo en SketchUp: (X = rx, Y = -rz)
+        # 4 puntos del suelo en SketchUp: (X = rx, Y = -rz, Z = 0)
         pts = [
           Geom::Point3d.new(rx,      -rz,      0),
           Geom::Point3d.new(rx + rw, -rz,      0),
@@ -68,13 +68,14 @@ module HouseControlSync
         ]
         face = r_group.entities.add_face(pts)
         if face
+          # Normal hacia arriba (+Z) para que el grosor quede debajo del nivel 0
+          face.reverse! if face.normal.z < 0
           mat = Materials.floor_material(model, room['floor'])
           face.material = mat
           face.back_material = mat
-          face.pushpull(-0.04.m) # Grosor de losa hacia abajo
+          face.pushpull(-0.04.m) # Losa hacia abajo del nivel 0.00
         end
 
-        # Atributos de la habitación
         r_group.set_attribute('HouseControl', 'category', 'room')
         r_group.set_attribute('HouseControl', 'id', room['id'].to_s)
         r_group.set_attribute('HouseControl', 'name', (room['name'] || room['id']).to_s)
@@ -83,10 +84,10 @@ module HouseControlSync
         r_group.set_attribute('HouseControl', 'raw_json', room.to_json)
       end
 
-      # 2. Paredes y Aberturas
+      # 2. Paredes y Aberturas (Puertas y Ventanas en Z positivo)
       build_walls_and_openings(ents, plan, model, tag_paredes, tag_aberturas, wall_height, int_wall_height)
 
-      # 3. Muebles
+      # 3. Muebles (En Z positivo con bordes redondeados y acolchados)
       (plan['furniture'] || []).each_with_index do |item, idx|
         next unless item['pos'] && item['pos'].is_a?(Array)
         f_group = ents.add_group
@@ -100,7 +101,6 @@ module HouseControlSync
         py = (item['y'] || 0).to_f.m
         rot_deg = (item['rot'] || 0).to_f
 
-        # Transformación de ubicación y rotación
         t_pos = Geom::Transformation.translation(Geom::Vector3d.new(px, -pz, py))
         t_rot = Geom::Transformation.rotation(Geom::Point3d.new(px, -pz, py), Geom::Vector3d.new(0, 0, 1), -rot_deg.degrees)
         f_group.transformation = t_rot * t_pos
@@ -109,26 +109,25 @@ module HouseControlSync
         f_group.set_attribute('HouseControl', 'id', (item['id'] || "furniture_#{idx}").to_s)
         f_group.set_attribute('HouseControl', 'type', item['type'].to_s)
         f_group.set_attribute('HouseControl', 'rot', rot_deg)
+        f_group.set_attribute('HouseControl', 'color', item['color'].to_s)
         f_group.set_attribute('HouseControl', 'raw_json', item.to_json)
       end
 
-      # 4. Luces
+      # 4. Luces (Suspendidas desde el techo o situadas sobre mesas/piso a su altura real Z)
       (plan['lights'] || []).each do |light|
         next unless light['pos'] && light['pos'].is_a?(Array)
         l_group = ents.add_group
         l_group.name = "Luz: #{light['name'] || light['id']}"
         l_group.layer = tag_luces
 
-        Builder.create_light_geometry(l_group, light, model)
+        Builder.create_light_geometry(l_group, light, wall_height, model)
 
         px = light['pos'][0].to_f.m
         pz = light['pos'][1].to_f.m
-        def_y = light['type'] == 'ceiling' ? wall_height : 0.8.m
-        py = light['y'] ? light['y'].to_f.m : def_y
         rot_deg = (light['rot'] || 0).to_f
 
-        t_pos = Geom::Transformation.translation(Geom::Vector3d.new(px, -pz, py))
-        t_rot = Geom::Transformation.rotation(Geom::Point3d.new(px, -pz, py), Geom::Vector3d.new(0, 0, 1), -rot_deg.degrees)
+        t_pos = Geom::Transformation.translation(Geom::Vector3d.new(px, -pz, 0))
+        t_rot = Geom::Transformation.rotation(Geom::Point3d.new(px, -pz, 0), Geom::Vector3d.new(0, 0, 1), -rot_deg.degrees)
         l_group.transformation = t_rot * t_pos
 
         l_group.set_attribute('HouseControl', 'category', 'light')
@@ -136,13 +135,15 @@ module HouseControlSync
         l_group.set_attribute('HouseControl', 'name', (light['name'] || light['id']).to_s)
         l_group.set_attribute('HouseControl', 'room', light['room'].to_s)
         l_group.set_attribute('HouseControl', 'type', light['type'].to_s)
+        l_group.set_attribute('HouseControl', 'y', (light['y'] || (light['type'] == 'ceiling' ? wall_height.to_m : 0.8)).to_f)
         l_group.set_attribute('HouseControl', 'capabilities', (light['capabilities'] || []).to_json)
         l_group.set_attribute('HouseControl', 'link', light['link'] ? light['link'].to_json : '')
         l_group.set_attribute('HouseControl', 'tuya', light['tuya'] ? light['tuya'].to_json : '')
+        l_group.set_attribute('HouseControl', 'color', light['color'].to_s)
         l_group.set_attribute('HouseControl', 'raw_json', light.to_json)
       end
 
-      # 5. Aires Acondicionados (Climas)
+      # 5. Aires Acondicionados (Suspendidos en muro a 2.20 m sobre el piso)
       (plan['acs'] || []).each do |ac|
         next unless ac['pos'] && ac['pos'].is_a?(Array)
         a_group = ents.add_group
@@ -153,9 +154,7 @@ module HouseControlSync
 
         px = ac['pos'][0].to_f.m
         pz = ac['pos'][1].to_f.m
-        py = (ac['y'] || 2.2).to_f.m
 
-        # Orientación según la pared ('north', 'south', 'east', 'west')
         rot_deg = case ac['wall'].to_s.downcase
                   when 'north' then 0.0
                   when 'south' then 180.0
@@ -164,8 +163,8 @@ module HouseControlSync
                   else 0.0
                   end
 
-        t_pos = Geom::Transformation.translation(Geom::Vector3d.new(px, -pz, py))
-        t_rot = Geom::Transformation.rotation(Geom::Point3d.new(px, -pz, py), Geom::Vector3d.new(0, 0, 1), rot_deg.degrees)
+        t_pos = Geom::Transformation.translation(Geom::Vector3d.new(px, -pz, 0))
+        t_rot = Geom::Transformation.rotation(Geom::Point3d.new(px, -pz, 0), Geom::Vector3d.new(0, 0, 1), rot_deg.degrees)
         a_group.transformation = t_rot * t_pos
 
         a_group.set_attribute('HouseControl', 'category', 'ac')
@@ -173,6 +172,7 @@ module HouseControlSync
         a_group.set_attribute('HouseControl', 'name', (ac['name'] || ac['id']).to_s)
         a_group.set_attribute('HouseControl', 'room', ac['room'].to_s)
         a_group.set_attribute('HouseControl', 'wall', ac['wall'].to_s)
+        a_group.set_attribute('HouseControl', 'y', (ac['y'] || 2.2).to_f)
         a_group.set_attribute('HouseControl', 'link', ac['link'] ? ac['link'].to_json : '')
         a_group.set_attribute('HouseControl', 'tuya', ac['tuya'] ? ac['tuya'].to_json : '')
         a_group.set_attribute('HouseControl', 'sensor', ac['sensor'] ? ac['sensor'].to_json : '')
@@ -182,12 +182,13 @@ module HouseControlSync
       model.commit_operation
       model.active_view.zoom_extents
 
-      UI.messagebox("¡Plano '#{plan['name'] || 'Home'}' importado con éxito!\n\n" +
+      UI.messagebox("¡Plano '#{plan['name'] || 'Home'}' importado correctamente!\n\n" +
+                    "• Altura de muros: #{(plan['wallHeight'] || 2.6)} m (Eje Z hacia arriba)\n" +
                     "• Habitaciones: #{rooms.size}\n" +
-                    "• Muebles: #{(plan['furniture'] || []).size}\n" +
-                    "• Luces: #{(plan['lights'] || []).size}\n" +
-                    "• Climas (AC): #{(plan['acs'] || []).size}\n\n" +
-                    "Cada elemento contiene sus datos y enlaces vinculados.")
+                    "• Muebles: #{(plan['furniture'] || []).size} (con aristas suavizadas)\n" +
+                    "• Luces: #{(plan['lights'] || []).size} (a su altura real de techo o mesa)\n" +
+                    "• Climas (AC): #{(plan['acs'] || []).size} (a 2.20 m sobre pared)\n\n" +
+                    "Todo el modelo se encuentra en coordenadas positivas sobre el nivel 0.00.")
     end
 
     def self.build_walls_and_openings(ents, plan, model, tag_paredes, tag_aberturas, wall_h, int_wall_h)
@@ -197,20 +198,18 @@ module HouseControlSync
       glass_mat = Materials.glass_material(model)
       frame_mat = Materials.frame_material(model)
 
-      # Muros por cada habitación
+      # Muros perimetrales por habitación
       rooms.each do |room|
         rx = room['rect'][0].to_f.m
         rz = room['rect'][1].to_f.m
         rw = room['rect'][2].to_f.m
         rd = room['rect'][3].to_f.m
 
-        # 4 esquinas
         p_nw = Geom::Point3d.new(rx,      -rz, 0)
         p_ne = Geom::Point3d.new(rx + rw, -rz, 0)
         p_se = Geom::Point3d.new(rx + rw, -(rz + rd), 0)
         p_sw = Geom::Point3d.new(rx,      -(rz + rd), 0)
 
-        # Muros perimetrales de la habitación
         [
           [p_nw, p_ne],
           [p_ne, p_se],
@@ -222,7 +221,7 @@ module HouseControlSync
         end
       end
 
-      # Modelar Aberturas (Puertas, Ventanas)
+      # Modelar Aberturas (Ventanas, Puertas y Vanos en Z positivo)
       openings.each_with_index do |op, idx|
         next unless op['from'] && op['to']
         ox1 = op['from'][0].to_f.m
@@ -243,27 +242,27 @@ module HouseControlSync
 
         case type
         when 'window'
-          # Antepecho (sill)
+          # Antepecho (sill) desde 0 hasta la altura del antepecho (ej. 0.85m o 1.50m)
           if sill > 0.05.m
             Builder.add_wall_segment(op_group.entities, p1, p2, 0.16.m, 0, sill, wall_mat)
           end
-          # Vidrio y marco
+          # Vidrio y marco transparente desde sill hasta dintel (head)
           Builder.add_wall_segment(op_group.entities, p1, p2, 0.04.m, sill, head, glass_mat)
-          # Dintel superior
+          # Dintel superior desde head (2.10m) hasta la altura del techo
           if head < wall_h
             Builder.add_wall_segment(op_group.entities, p1, p2, 0.16.m, head, wall_h, wall_mat)
           end
 
         when 'door'
-          # Marco de puerta
+          # Marco de puerta desde 0 hasta 2.10m
           Builder.add_wall_segment(op_group.entities, p1, p2, 0.08.m, 0, head, frame_mat)
-          # Dintel superior
+          # Dintel superior de 2.10m al techo
           if head < wall_h
             Builder.add_wall_segment(op_group.entities, p1, p2, 0.16.m, head, wall_h, wall_mat)
           end
 
         when 'open'
-          # Dintel superior únicamente
+          # Vano abierto (solo dintel superior de 2.10m al techo)
           if head < wall_h
             Builder.add_wall_segment(op_group.entities, p1, p2, 0.16.m, head, wall_h, wall_mat)
           end

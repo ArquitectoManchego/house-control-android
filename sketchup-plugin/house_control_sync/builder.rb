@@ -1,8 +1,8 @@
 # encoding: UTF-8
 module HouseControlSync
   module Builder
-    # Dibuja un prisma rectangular (box) en el sistema local
-    def self.add_box(entities, width, depth, height, material = nil)
+    # Dibuja un prisma rectangular (box) asegurando que extruya hacia +Z (arriba del piso)
+    def self.add_box(entities, width, depth, height, material = nil, smooth = false)
       group = entities.add_group
       pts = [
         Geom::Point3d.new(-width / 2.0, -depth / 2.0, 0),
@@ -12,30 +12,107 @@ module HouseControlSync
       ]
       face = group.entities.add_face(pts)
       if face
+        # Corregir la orientación nativa de SketchUp: forzar normal hacia arriba (+Z)
+        face.reverse! if face.normal.z < 0
         face.material = material if material
         face.back_material = material if material
         face.pushpull(height) if height > 0
         group.material = material if material
       end
+
+      if smooth
+        group.entities.grep(Sketchup::Edge).each do |edge|
+          edge.soft = true
+          edge.smooth = true
+        end
+      end
+
       group
     end
 
-    # Dibuja un cilindro vertical
-    def self.add_cylinder(entities, radius, height, material = nil, segments = 16)
+    # Dibuja un cilindro con normal hacia arriba (+Z) y aristas laterales suavizadas
+    def self.add_cylinder(entities, radius, height, material = nil, segments = 24, smooth = true)
       group = entities.add_group
       center = Geom::Point3d.new(0, 0, 0)
       normal = Geom::Vector3d.new(0, 0, 1)
       circle = group.entities.add_circle(center, normal, radius, segments)
       face = group.entities.add_face(circle)
       if face
+        face.reverse! if face.normal.z < 0
         face.material = material if material
+        face.back_material = material if material
         face.pushpull(height) if height > 0
         group.material = material if material
       end
+
+      if smooth
+        group.entities.grep(Sketchup::Edge).each do |edge|
+          if edge.line[1].z.abs > 0.8
+            edge.soft = true
+            edge.smooth = true
+          end
+        end
+      end
+
       group
     end
 
-    # Dibuja un tramo de muro 3D entre dos puntos en coordenadas de SketchUp
+    # Crea un cojín o almohada con bordes suavizados/redondeados orgánicos
+    def self.add_rounded_cushion(entities, width, depth, height, material)
+      group = entities.add_group
+      ents = group.entities
+
+      # Base del cojín
+      h_base = height * 0.6
+      b = add_box(ents, width, depth, h_base, material, false)
+
+      # Cúpula o bisel superior suavizado
+      inset = [width * 0.08, depth * 0.08].min
+      w_top = width - inset * 2
+      d_top = depth - inset * 2
+      h_top = height * 0.4
+
+      pts_base = [
+        Geom::Point3d.new(-width / 2.0, -depth / 2.0, h_base),
+        Geom::Point3d.new( width / 2.0, -depth / 2.0, h_base),
+        Geom::Point3d.new( width / 2.0,  depth / 2.0, h_base),
+        Geom::Point3d.new(-width / 2.0,  depth / 2.0, h_base)
+      ]
+      pts_top = [
+        Geom::Point3d.new(-w_top / 2.0, -d_top / 2.0, height),
+        Geom::Point3d.new( w_top / 2.0, -d_top / 2.0, height),
+        Geom::Point3d.new( w_top / 2.0,  d_top / 2.0, height),
+        Geom::Point3d.new(-w_top / 2.0,  d_top / 2.0, height)
+      ]
+
+      # Caras del bisel
+      4.times do |i|
+        j = (i + 1) % 4
+        f = ents.add_face([pts_base[i], pts_base[j], pts_top[j], pts_top[i]])
+        if f
+          f.material = material
+          f.back_material = material
+        end
+      end
+      # Tapa superior
+      f_top = ents.add_face(pts_top)
+      if f_top
+        f_top.reverse! if f_top.normal.z < 0
+        f_top.material = material
+        f_top.back_material = material
+      end
+
+      # Suavizar todas las aristas interiores para aspecto acolchado
+      ents.grep(Sketchup::Edge).each do |edge|
+        edge.soft = true
+        edge.smooth = true
+      end
+
+      group.material = material
+      group
+    end
+
+    # Dibuja un tramo de muro 3D garantizando altura positiva (+Z)
     def self.add_wall_segment(entities, p1, p2, thickness, y_bottom, y_top, material)
       height = y_top - y_bottom
       return nil if height <= 0
@@ -45,12 +122,10 @@ module HouseControlSync
       len = Math.sqrt(dx * dx + dy * dy)
       return nil if len < 0.001.m
 
-      # Vector perpendicular horizontal (normal al muro)
       nx = -dy / len
       ny =  dx / len
       half_t = thickness / 2.0
 
-      # 4 esquinas de la base
       pts = [
         Geom::Point3d.new(p1.x + nx * half_t, p1.y + ny * half_t, y_bottom),
         Geom::Point3d.new(p2.x + nx * half_t, p2.y + ny * half_t, y_bottom),
@@ -61,14 +136,17 @@ module HouseControlSync
       group = entities.add_group
       face = group.entities.add_face(pts)
       if face
+        # Forzar normal hacia arriba (+Z) para que pushpull extruya hacia el techo
+        face.reverse! if face.normal.z < 0
         face.material = material if material
+        face.back_material = material if material
         face.pushpull(height)
         group.material = material if material
       end
       group
     end
 
-    # Dibuja un mueble estilizado según su tipo
+    # Dibuja un mueble estilizado según su tipo respetando alturas reales y esquinas redondeadas
     def self.create_furniture_geometry(group, item, model)
       ents = group.entities
       type = item['type'].to_s
@@ -85,48 +163,54 @@ module HouseControlSync
       case type
       when 'sofa'
         # Base de patas
-        add_box(ents, w, d, 0.12.m, dark)
-        # Asiento
-        add_box(ents, w, d, 0.45.m, mat).transformation = Geom::Transformation.translation([0, 0, 0.12.m])
-        # Respaldo
-        back = add_box(ents, w, 0.22.m, 0.40.m, mat)
+        add_box(ents, w, d, 0.10.m, dark)
+        # Asiento acolchado
+        add_rounded_cushion(ents, w, d, 0.35.m, mat).transformation = Geom::Transformation.translation([0, 0, 0.10.m])
+        # Respaldo acolchado
+        back = add_rounded_cushion(ents, w, 0.22.m, 0.42.m, mat)
         back.transformation = Geom::Transformation.translation([0, d / 2.0 - 0.11.m, 0.45.m])
-        # Brazos
-        arm_l = add_box(ents, 0.18.m, d, 0.25.m, mat)
+        # Brazos con esquinas redondeadas
+        arm_l = add_rounded_cushion(ents, 0.18.m, d, 0.25.m, mat)
         arm_l.transformation = Geom::Transformation.translation([-w / 2.0 + 0.09.m, 0, 0.45.m])
-        arm_r = add_box(ents, 0.18.m, d, 0.25.m, mat)
+        arm_r = add_rounded_cushion(ents, 0.18.m, d, 0.25.m, mat)
         arm_r.transformation = Geom::Transformation.translation([w / 2.0 - 0.09.m, 0, 0.45.m])
 
       when 'bed'
-        # Base / Cabecera
-        head = add_box(ents, w, 0.12.m, 0.95.m, wood)
-        head.transformation = Geom::Transformation.translation([0, d / 2.0 - 0.06.m, 0])
-        # Colchón
-        mattress = add_box(ents, w - 0.08.m, d - 0.16.m, 0.45.m, mat)
-        mattress.transformation = Geom::Transformation.translation([0, -0.06.m, 0])
-        # Almohadas
-        p1 = add_box(ents, (w - 0.2.m) / 2.0, 0.40.m, 0.12.m, white)
-        p1.transformation = Geom::Transformation.translation([-(w - 0.2.m) / 4.0, d / 2.0 - 0.35.m, 0.45.m])
-        p2 = add_box(ents, (w - 0.2.m) / 2.0, 0.40.m, 0.12.m, white)
-        p2.transformation = Geom::Transformation.translation([(w - 0.2.m) / 4.0, d / 2.0 - 0.35.m, 0.45.m])
+        # Cabecera de madera
+        head = add_box(ents, w + 0.10.m, 0.10.m, 1.02.m, wood)
+        head.transformation = Geom::Transformation.translation([0, d / 2.0 - 0.05.m, 0])
+        # Base de cama
+        add_box(ents, w + 0.04.m, d, 0.26.m, wood)
+        # Colchón con suavizado de esquinas
+        mattress = add_rounded_cushion(ents, w, d - 0.08.m, 0.22.m, white)
+        mattress.transformation = Geom::Transformation.translation([0, -0.04.m, 0.26.m])
+        # Almohadas suaves redondeadas
+        pw = (w - 0.20.m) / 2.0
+        p1 = add_rounded_cushion(ents, pw, 0.42.m, 0.14.m, white)
+        p1.transformation = Geom::Transformation.translation([-pw / 2.0 - 0.04.m, d / 2.0 - 0.32.m, 0.48.m])
+        p2 = add_rounded_cushion(ents, pw, 0.42.m, 0.14.m, white)
+        p2.transformation = Geom::Transformation.translation([pw / 2.0 + 0.04.m, d / 2.0 - 0.32.m, 0.48.m])
+        # Edredón / Manta doblada
+        blanket = add_rounded_cushion(ents, w + 0.02.m, d * 0.55, 0.06.m, mat)
+        blanket.transformation = Geom::Transformation.translation([0, -d * 0.20, 0.48.m])
 
       when 'tv'
-        # Pantalla
-        screen = add_box(ents, w, 0.06.m, 0.70.m, dark)
-        screen.transformation = Geom::Transformation.translation([0, 0, 0.65.m])
-        # Mueble soporte
-        stand = add_box(ents, w + 0.2.m, 0.38.m, 0.45.m, wood)
+        # Mueble bajo consola
+        stand = add_box(ents, w + 0.20.m, 0.38.m, 0.45.m, wood)
+        # Pantalla de TV plana
+        screen = add_box(ents, w, 0.05.m, 0.72.m, dark)
+        screen.transformation = Geom::Transformation.translation([0, 0, 0.45.m])
 
       when 'diningSet'
-        # Mesa
-        table = add_box(ents, w, 0.90.m, 0.06.m, wood)
+        # Mesa de comedor
+        table = add_box(ents, w, 0.90.m, 0.05.m, wood)
         table.transformation = Geom::Transformation.translation([0, 0, 0.72.m])
-        # Patas
+        # 4 Patas cilíndricas
         add_cylinder(ents, 0.03.m, 0.72.m, dark).transformation = Geom::Transformation.translation([-w/2.0 + 0.1.m, -0.35.m, 0])
         add_cylinder(ents, 0.03.m, 0.72.m, dark).transformation = Geom::Transformation.translation([ w/2.0 - 0.1.m, -0.35.m, 0])
         add_cylinder(ents, 0.03.m, 0.72.m, dark).transformation = Geom::Transformation.translation([-w/2.0 + 0.1.m,  0.35.m, 0])
         add_cylinder(ents, 0.03.m, 0.72.m, dark).transformation = Geom::Transformation.translation([ w/2.0 - 0.1.m,  0.35.m, 0])
-        # Sillas representativas
+        # Sillas
         chairs_count = item['chairs'] || 4
         chairs_count.times do |i|
           cx = -w/2.0 + (w / (chairs_count/2.0 + 1)) * (i % (chairs_count/2) + 1)
@@ -136,40 +220,50 @@ module HouseControlSync
         end
 
       when 'rug'
-        # Alfombra plana
-        add_box(ents, w, d, 0.015.m, mat)
+        # Alfombra con aristas suavizadas sobre el piso
+        add_box(ents, w, d, 0.015.m, mat, true)
 
       when 'plant'
-        # Maceta cilíndrica
-        pot = add_cylinder(ents, 0.20.m, 0.35.m, dark)
-        # Follaje verde
+        # Maceta cónica/cilíndrica
+        add_cylinder(ents, 0.18.m, 0.32.m, dark)
+        # Planta verde
         green = Materials.get_or_create(model, 'HC_Planta_Verde', '#4F9462')
-        foliage = add_cylinder(ents, 0.32.m, h > 0.4.m ? (h - 0.35.m) : 0.60.m, green)
-        foliage.transformation = Geom::Transformation.translation([0, 0, 0.35.m])
+        plant_h = h > 0.4.m ? (h - 0.32.m) : 0.65.m
+        foliage = add_cylinder(ents, 0.28.m, plant_h, green, 16, true)
+        foliage.transformation = Geom::Transformation.translation([0, 0, 0.32.m])
 
       when 'kitchen', 'island'
-        # Mueble bajo y encimera
+        # Mueble bajo de cocina y encimera
         stone = Materials.floor_material(model, 'stone')
         add_box(ents, w, d, 0.86.m, dark)
         counter = add_box(ents, w + 0.04.m, d + 0.04.m, 0.04.m, stone)
         counter.transformation = Geom::Transformation.translation([0, 0, 0.86.m])
 
+      when 'fridge'
+        # Refrigerador vertical
+        add_box(ents, 0.70.m, 0.68.m, 1.85.m, mat, true)
+
       when 'bathtub'
-        add_box(ents, 1.70.m, 0.75.m, 0.55.m, white)
+        add_box(ents, 1.70.m, 0.75.m, 0.55.m, white, true)
 
       when 'toilet'
-        bowl = add_box(ents, 0.40.m, 0.55.m, 0.42.m, white)
-        tank = add_box(ents, 0.40.m, 0.22.m, 0.40.m, white)
-        tank.transformation = Geom::Transformation.translation([0, 0.22.m, 0.40.m])
+        bowl = add_box(ents, 0.40.m, 0.55.m, 0.42.m, white, true)
+        tank = add_box(ents, 0.40.m, 0.22.m, 0.40.m, white, true)
+        tank.transformation = Geom::Transformation.translation([0, 0.20.m, 0.42.m])
+
+      when 'armchair'
+        add_rounded_cushion(ents, w, d, 0.45.m, mat)
+        back = add_rounded_cushion(ents, w, 0.20.m, 0.35.m, mat)
+        back.transformation = Geom::Transformation.translation([0, d / 2.0 - 0.10.m, 0.45.m])
 
       else
-        # Forma cúbica estándar proporcional
-        add_box(ents, w, d, h, mat)
+        # Elemento genérico / Personalizado (mesas, escritorios, autos, etc.)
+        add_box(ents, w, d, h, mat, true)
       end
     end
 
-    # Dibuja una lámpara o luz en 3D
-    def self.create_light_geometry(group, light, model)
+    # Dibuja luminarias con su geometría real suspendida hacia abajo desde el techo o parada en el piso
+    def self.create_light_geometry(group, light, wall_height, model)
       ents = group.entities
       type = light['type'].to_s
       color = light['color']
@@ -178,52 +272,68 @@ module HouseControlSync
       dark = Materials.get_or_create(model, 'HC_Metal_Oscuro', '#1B1C21')
 
       case type
-      when 'pendant'
-        # Cable colgante y pantalla
-        add_cylinder(ents, 0.008.m, 0.60.m, dark).transformation = Geom::Transformation.translation([0, 0, -0.60.m])
-        shade = add_cylinder(ents, 0.18.m, 0.22.m, brass)
-        shade.transformation = Geom::Transformation.translation([0, 0, -0.82.m])
-        bulb = add_cylinder(ents, 0.06.m, 0.08.m, light_mat)
-        bulb.transformation = Geom::Transformation.translation([0, 0, -0.85.m])
-
       when 'ceiling'
-        # Plafón de techo circular
-        base = add_cylinder(ents, 0.22.m, 0.04.m, brass)
-        diffuser = add_cylinder(ents, 0.20.m, 0.03.m, light_mat)
-        diffuser.transformation = Geom::Transformation.translation([0, 0, -0.03.m])
+        # Lámpara adosada al techo: fixture contra el techo, difusor hacia abajo
+        h_ceil = wall_height
+        add_cylinder(ents, 0.22.m, 0.03.m, brass).transformation = Geom::Transformation.translation([0, 0, h_ceil - 0.03.m])
+        add_cylinder(ents, 0.18.m, 0.04.m, light_mat).transformation = Geom::Transformation.translation([0, 0, h_ceil - 0.07.m])
+
+      when 'pendant'
+        # Lámpara colgante: florón en techo, cable que baja hasta la altura 'y', y pantalla esférica
+        py = light['y'] ? light['y'].to_f.m : 1.75.m
+        h_ceil = wall_height
+        # Florón techo
+        add_cylinder(ents, 0.06.m, 0.03.m, dark).transformation = Geom::Transformation.translation([0, 0, h_ceil - 0.03.m])
+        # Cable colgante desde el techo hasta py
+        cable_len = [h_ceil - py - 0.20.m, 0.1.m].max
+        add_cylinder(ents, 0.006.m, cable_len, dark).transformation = Geom::Transformation.translation([0, 0, py + 0.20.m])
+        # Pantalla / Esfera iluminada
+        shade = add_cylinder(ents, 0.18.m, 0.18.m, brass)
+        shade.transformation = Geom::Transformation.translation([0, 0, py + 0.04.m])
+        bulb = add_cylinder(ents, 0.10.m, 0.08.m, light_mat)
+        bulb.transformation = Geom::Transformation.translation([0, 0, py - 0.04.m])
 
       when 'spots'
-        # Riel o foco direccional
-        add_box(ents, 0.10.m, 0.10.m, 0.04.m, dark)
-        spot = add_cylinder(ents, 0.045.m, 0.09.m, light_mat)
-        spot.transformation = Geom::Transformation.translation([0, 0, -0.09.m])
+        # Riel de focos adosado al techo
+        h_ceil = wall_height
+        rail = add_box(ents, 0.95.m, 0.06.m, 0.03.m, dark)
+        rail.transformation = Geom::Transformation.translation([0, 0, h_ceil - 0.03.m])
+        # 3 focos direccionales
+        [-0.32.m, 0, 0.32.m].each do |sx|
+          spot = add_cylinder(ents, 0.045.m, 0.08.m, light_mat)
+          spot.transformation = Geom::Transformation.translation([sx, 0, h_ceil - 0.11.m])
+        end
 
       when 'floor'
-        # Lámpara de pie
-        add_cylinder(ents, 0.18.m, 0.02.m, dark)
-        add_cylinder(ents, 0.015.m, 1.40.m, brass)
-        shade = add_cylinder(ents, 0.20.m, 0.32.m, light_mat)
-        shade.transformation = Geom::Transformation.translation([0, 0, 1.35.m])
+        # Lámpara de pie parada en el piso
+        add_cylinder(ents, 0.18.m, 0.025.m, dark)
+        add_cylinder(ents, 0.012.m, 1.30.m, brass).transformation = Geom::Transformation.translation([0, 0, 0.025.m])
+        shade = add_cylinder(ents, 0.20.m, 0.30.m, light_mat)
+        shade.transformation = Geom::Transformation.translation([0, 0, 1.30.m])
 
       when 'table'
-        # Lámpara de mesa
-        add_cylinder(ents, 0.10.m, 0.02.m, brass)
-        add_cylinder(ents, 0.012.m, 0.35.m, brass)
-        shade = add_cylinder(ents, 0.14.m, 0.20.m, light_mat)
-        shade.transformation = Geom::Transformation.translation([0, 0, 0.30.m])
+        # Lámpara de mesa situada sobre mesita / buró a altura 'y'
+        py = light['y'] ? light['y'].to_f.m : 0.50.m
+        add_cylinder(ents, 0.10.m, 0.02.m, brass).transformation = Geom::Transformation.translation([0, 0, py])
+        add_cylinder(ents, 0.012.m, 0.22.m, brass).transformation = Geom::Transformation.translation([0, 0, py + 0.02.m])
+        shade = add_cylinder(ents, 0.14.m, 0.18.m, light_mat)
+        shade.transformation = Geom::Transformation.translation([0, 0, py + 0.20.m])
 
       when 'strip'
-        # Tira LED lineal
+        # Tira LED lineal a la altura indicada
+        py = light['y'] ? light['y'].to_f.m : 1.10.m
         len = (light['length'] || 1.5).to_f.m
-        add_box(ents, len, 0.03.m, 0.02.m, light_mat)
+        strip = add_box(ents, len, 0.04.m, 0.025.m, light_mat)
+        strip.transformation = Geom::Transformation.translation([0, 0, py])
 
       else
-        # Marcador genérico de luz
-        add_cylinder(ents, 0.12.m, 0.06.m, light_mat)
+        # Foco genérico
+        py = light['y'] ? light['y'].to_f.m : wall_height - 0.15.m
+        add_cylinder(ents, 0.12.m, 0.06.m, light_mat).transformation = Geom::Transformation.translation([0, 0, py])
       end
     end
 
-    # Dibuja un mini-split (Aire Acondicionado)
+    # Dibuja un mini-split (Aire Acondicionado) suspendido en muro a su altura real
     def self.create_ac_geometry(group, ac, model)
       ents = group.entities
       ac_body = Materials.ac_material(model)
@@ -233,15 +343,19 @@ module HouseControlSync
       w = 0.90.m
       d = 0.22.m
       h = 0.30.m
+      py = (ac['y'] || 2.2).to_f.m
 
-      # Cuerpo principal blanco con perfil aerodinámico
-      add_box(ents, w, d, h, ac_body)
+      # Cuerpo principal a la altura 'py' con esquinas suavizadas
+      body = add_box(ents, w, d, h, ac_body, true)
+      body.transformation = Geom::Transformation.translation([0, 0, py])
+
       # Rejilla inferior de ventilación
       vent = add_box(ents, w - 0.10.m, 0.06.m, 0.04.m, ac_vent)
-      vent.transformation = Geom::Transformation.translation([0, -d/2.0 + 0.04.m, 0.02.m])
+      vent.transformation = Geom::Transformation.translation([0, -d/2.0 + 0.04.m, py + 0.02.m])
+
       # Indicador LED digital
       led = add_box(ents, 0.06.m, 0.01.m, 0.03.m, ac_led)
-      led.transformation = Geom::Transformation.translation([w/2.0 - 0.15.m, -d/2.0 + 0.005.m, h/2.0])
+      led.transformation = Geom::Transformation.translation([w/2.0 - 0.15.m, -d/2.0 + 0.005.m, py + h/2.0])
     end
 
     def self.default_width(type)
