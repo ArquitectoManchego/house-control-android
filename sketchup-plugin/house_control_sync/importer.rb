@@ -12,14 +12,18 @@ module HouseControlSync
 
     def self.import_file(model, filepath)
       content = File.read(filepath, encoding: 'UTF-8')
+      import_json_string(model, content, File.basename(filepath), true)
+    end
+
+    def self.import_json_string(model, content, source_name = 'Plano', show_msg = true)
       plan = JSON.parse(content)
 
       unless plan['rooms'] && plan['rooms'].is_a?(Array) && !plan['rooms'].empty?
-        UI.messagebox("Error: El archivo #{File.basename(filepath)} no es un plano válido de House Control (falta la lista 'rooms').")
-        return
+        UI.messagebox("Error: #{source_name} no contiene un plano válido de House Control (falta la lista 'rooms').")
+        return false
       end
 
-      model.start_operation('Importar Plano House Control', true)
+      model.start_operation("Importar Plano #{plan['name'] || 'Home'}", true)
 
       # Asegurar Tags / Capas de organización arquitectónica en SketchUp
       tag_pisos     = get_or_create_layer(model, 'HC_Pisos')
@@ -182,13 +186,17 @@ module HouseControlSync
       model.commit_operation
       model.active_view.zoom_extents
 
-      UI.messagebox("¡Plano '#{plan['name'] || 'Home'}' importado correctamente!\n\n" +
-                    "• Altura de muros: #{(plan['wallHeight'] || 2.6)} m (Eje Z hacia arriba)\n" +
-                    "• Habitaciones: #{rooms.size}\n" +
-                    "• Muebles: #{(plan['furniture'] || []).size} (con aristas suavizadas)\n" +
-                    "• Luces: #{(plan['lights'] || []).size} (a su altura real de techo o mesa)\n" +
-                    "• Climas (AC): #{(plan['acs'] || []).size} (a 2.20 m sobre pared)\n\n" +
-                    "Todo el modelo se encuentra en coordenadas positivas sobre el nivel 0.00.")
+      if show_msg
+        UI.messagebox("¡Plano '#{plan['name'] || 'Home'}' sincronizado correctamente!\n\n" +
+                      "• Origen: #{source_name}\n" +
+                      "• Altura de muros: #{(plan['wallHeight'] || 2.6)} m (Eje Z hacia arriba)\n" +
+                      "• Habitaciones: #{rooms.size}\n" +
+                      "• Muebles: #{(plan['furniture'] || []).size} (con aristas suavizadas)\n" +
+                      "• Luces: #{(plan['lights'] || []).size} (a su altura real de techo o mesa)\n" +
+                      "• Climas (AC): #{(plan['acs'] || []).size} (a 2.20 m sobre pared)\n\n" +
+                      "Todo el modelo se encuentra en coordenadas positivas sobre el nivel 0.00.")
+      end
+      true
     end
 
     def self.build_walls_and_openings(ents, plan, model, tag_paredes, tag_aberturas, wall_h, int_wall_h)

@@ -167,6 +167,7 @@ private fun RouteScreen(model: AppModel, route: Route, insideEditor: Boolean, op
         Route.Hue -> HueScreen(model, insideEditor, open, back)
         Route.Devices -> DevicesScreen(model, back)
         Route.CloudSync -> CloudSyncScreen(model, back)
+        Route.SketchUpSync -> SketchUpSyncScreen(model, back)
     }
 }
 

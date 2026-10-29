@@ -1,0 +1,823 @@
+{
+  "version": 1,
+  "name": "Casa Pavon",
+  "wallHeight": 2.7,
+  "interiorWallHeight": 1.25,
+  "outdoorTemp": 30.0,
+  "camera": {
+    "azimuth": 34.0,
+    "elevation": 47.0
+  },
+  "scenes": [
+    {
+      "icon": "sun",
+      "id": "bright",
+      "lights": {
+        "*": {
+          "brightness": 1,
+          "on": true,
+          "temp": 4200
+        }
+      },
+      "name": "Bright"
+    },
+    {
+      "icon": "sofa",
+      "id": "cozy",
+      "lights": {
+        "*": {
+          "on": false
+        },
+        "bedroom.left": {
+          "on": true
+        },
+        "bedroom.right": {
+          "on": true
+        },
+        "dining.pendant": {
+          "brightness": 0.45,
+          "on": true,
+          "temp": 2400
+        },
+        "kitchen.strip": {
+          "brightness": 0.6,
+          "on": true,
+          "temp": 2700
+        },
+        "living.tv": {
+          "brightness": 0.7,
+          "color": "#ff7a3c",
+          "on": true
+        }
+      },
+      "name": "Cozy"
+    },
+    {
+      "icon": "film",
+      "id": "movie",
+      "lights": {
+        "*": {
+          "on": false
+        },
+        "kitchen.strip": {
+          "brightness": 0.2,
+          "on": true,
+          "temp": 2400
+        },
+        "living.tv": {
+          "brightness": 0.9,
+          "color": "#6a4cff",
+          "on": true
+        }
+      },
+      "name": "Movie"
+    },
+    {
+      "acs": {
+        "bedroom.ac": {
+          "sleep": true
+        }
+      },
+      "icon": "moon",
+      "id": "night",
+      "lights": {
+        "*": {
+          "on": false
+        },
+        "bath.mirror": {
+          "brightness": 0.25,
+          "on": true,
+          "temp": 2300
+        },
+        "bedroom.left": {
+          "on": true
+        }
+      },
+      "name": "Night"
+    },
+    {
+      "acs": {
+        "*": {
+          "on": false
+        }
+      },
+      "icon": "door",
+      "id": "away",
+      "lights": {
+        "*": {
+          "on": false
+        }
+      },
+      "name": "Away"
+    }
+  ],
+  "rooms": [
+    {
+      "floor": "oak",
+      "id": "living",
+      "name": "Sala",
+      "rect": [
+        0.0,
+        5.8,
+        6.5,
+        6.7
+      ]
+    },
+    {
+      "floor": "oak",
+      "id": "dining",
+      "name": "Comedor",
+      "rect": [
+        6.4,
+        4.6,
+        4.0,
+        5.8
+      ]
+    },
+    {
+      "floor": "tile",
+      "id": "kitchen",
+      "name": "Cocina",
+      "rect": [
+        6.4,
+        0.0,
+        4.0,
+        4.6
+      ]
+    },
+    {
+      "floor": "walnut",
+      "id": "bedroom",
+      "name": "Baño planta baja ",
+      "rect": [
+        0.0,
+        0.0,
+        4.2,
+        3.6
+      ]
+    },
+    {
+      "floor": "tile",
+      "id": "bath",
+      "name": "Pasillo",
+      "rect": [
+        4.2,
+        0.0,
+        2.2,
+        5.7
+      ]
+    },
+    {
+      "floor": "oak",
+      "id": "room",
+      "name": "Patio",
+      "rect": [
+        6.4,
+        -3.0,
+        4.0,
+        3.0
+      ]
+    },
+    {
+      "floor": "oak",
+      "id": "room2",
+      "name": "Cuarto de lavado",
+      "rect": [
+        0.0,
+        -3.0,
+        6.3,
+        2.9
+      ]
+    },
+    {
+      "floor": "oak",
+      "id": "room3",
+      "name": "Escaleras centrales",
+      "rect": [
+        0.0,
+        3.5,
+        4.2,
+        2.2
+      ]
+    },
+    {
+      "floor": "oak",
+      "id": "room4",
+      "name": "Lobby",
+      "rect": [
+        6.4,
+        10.4,
+        4.0,
+        2.0
+      ]
+    },
+    {
+      "floor": "oak",
+      "id": "room5",
+      "name": "Escalera entrada",
+      "rect": [
+        6.4,
+        12.4,
+        4.0,
+        1.0
+      ]
+    },
+    {
+      "floor": "oak",
+      "id": "room6",
+      "name": "Garage",
+      "rect": [
+        0.0,
+        12.4,
+        6.4,
+        5.0
+      ]
+    },
+    {
+      "floor": "oak",
+      "id": "room7",
+      "name": "Taller",
+      "rect": [
+        6.4,
+        13.4,
+        4.0,
+        4.0
+      ]
+    },
+    {
+      "floor": "oak",
+      "id": "room8",
+      "name": "Calle",
+      "rect": [
+        0.0,
+        17.4,
+        10.4,
+        2.0
+      ]
+    }
+  ],
+  "openings": [
+    {
+      "from": [
+        7,
+        4.6
+      ],
+      "to": [
+        10,
+        4.6
+      ],
+      "type": "open",
+      "sill": 0.85,
+      "head": 2.1
+    },
+    {
+      "from": [
+        0.9,
+        0
+      ],
+      "head": 2.2,
+      "sill": 1.5,
+      "to": [
+        2.3,
+        0
+      ],
+      "type": "window"
+    },
+    {
+      "from": [
+        2.8,
+        12.5
+      ],
+      "to": [
+        3.7,
+        12.5
+      ],
+      "type": "door",
+      "sill": 0.85,
+      "head": 2.1
+    },
+    {
+      "from": [
+        2.8,
+        12.5
+      ],
+      "to": [
+        3.7,
+        12.5
+      ],
+      "type": "door",
+      "sill": 0.85,
+      "head": 2.1
+    },
+    {
+      "from": [
+        2.8,
+        12.5
+      ],
+      "to": [
+        3.7,
+        12.5
+      ],
+      "type": "door",
+      "sill": 0.85,
+      "head": 2.1
+    },
+    {
+      "from": [
+        4.7,
+        5.8
+      ],
+      "to": [
+        5.5,
+        5.8
+      ],
+      "type": "door",
+      "sill": 0.85,
+      "head": 2.1
+    },
+    {
+      "from": [
+        0.9,
+        0
+      ],
+      "head": 2.2,
+      "sill": 1.5,
+      "to": [
+        2.3,
+        0
+      ],
+      "type": "window"
+    },
+    {
+      "from": [
+        4.7,
+        5.8
+      ],
+      "to": [
+        5.5,
+        5.8
+      ],
+      "type": "door",
+      "sill": 0.85,
+      "head": 2.1
+    },
+    {
+      "from": [
+        6.4,
+        6.4
+      ],
+      "to": [
+        6.4,
+        10
+      ],
+      "type": "open",
+      "sill": 0.85,
+      "head": 2.1
+    },
+    {
+      "from": [
+        0.9,
+        0
+      ],
+      "head": 2.2,
+      "sill": 1.5,
+      "to": [
+        2.3,
+        0
+      ],
+      "type": "window"
+    },
+    {
+      "from": [
+        4.7,
+        5.8
+      ],
+      "to": [
+        5.5,
+        5.8
+      ],
+      "type": "door",
+      "sill": 0.85,
+      "head": 2.1
+    }
+  ],
+  "furniture": [
+    {
+      "pos": [
+        0.32,
+        7.29
+      ],
+      "rot": 90,
+      "type": "tv",
+      "width": 1.7,
+      "color": ""
+    },
+    {
+      "color": "#8b93a7",
+      "pos": [
+        0.55,
+        10.45
+      ],
+      "rot": -90,
+      "type": "sofa",
+      "width": 2.5
+    },
+    {
+      "pos": [
+        1.9,
+        10.65
+      ],
+      "rot": 90,
+      "type": "coffeeTable",
+      "color": ""
+    },
+    {
+      "color": "#c28a5a",
+      "pos": [
+        1.7,
+        8.9
+      ],
+      "rot": 1,
+      "type": "armchair"
+    },
+    {
+      "height": 1.5,
+      "pos": [
+        0.5,
+        9.85
+      ],
+      "type": "plant",
+      "color": ""
+    },
+    {
+      "chairs": 6,
+      "pos": [
+        1.61,
+        7.37
+      ],
+      "type": "diningSet",
+      "width": 1.9,
+      "color": ""
+    },
+    {
+      "height": 1.1,
+      "pos": [
+        9.95,
+        8.75
+      ],
+      "type": "plant",
+      "color": ""
+    },
+    {
+      "pos": [
+        8.05,
+        0.41
+      ],
+      "type": "kitchen",
+      "upper": true,
+      "width": 3.1,
+      "color": ""
+    },
+    {
+      "pos": [
+        6.83,
+        0.45
+      ],
+      "type": "fridge",
+      "color": ""
+    },
+    {
+      "height": 0.9,
+      "pos": [
+        0.45,
+        3.15
+      ],
+      "type": "plant",
+      "color": ""
+    },
+    {
+      "pos": [
+        0.32,
+        2.92
+      ],
+      "type": "vanity",
+      "width": 1,
+      "rot": -90,
+      "color": ""
+    },
+    {
+      "pos": [
+        3.67,
+        0.46
+      ],
+      "rot": 90,
+      "type": "toilet",
+      "color": ""
+    },
+    {
+      "color": "#8b93a7",
+      "pos": [
+        2.31,
+        11.82
+      ],
+      "rot": 180,
+      "type": "sofa",
+      "width": 2.5
+    },
+    {
+      "pos": [
+        9.98,
+        1.64
+      ],
+      "type": "kitchen",
+      "upper": true,
+      "width": 3.1,
+      "rot": 90,
+      "color": ""
+    },
+    {
+      "type": "sofa",
+      "pos": [
+        8.66,
+        6.34
+      ]
+    },
+    {
+      "type": "sofa",
+      "pos": [
+        8.66,
+        7.79
+      ]
+    },
+    {
+      "type": "sofa",
+      "pos": [
+        9.23,
+        6.21
+      ],
+      "rot": -90
+    },
+    {
+      "type": "sofa",
+      "pos": [
+        8.66,
+        9.21
+      ]
+    },
+    {
+      "type": "sofa",
+      "pos": [
+        0.08,
+        5.7
+      ]
+    }
+  ],
+  "lights": [
+    {
+      "capabilities": [
+        "brightness",
+        "temp"
+      ],
+      "id": "living.main",
+      "name": "Ceiling",
+      "pos": [
+        3.35,
+        10.65
+      ],
+      "room": "living",
+      "type": "ceiling",
+      "y": 2.7,
+      "color": ""
+    },
+    {
+      "capabilities": [
+        "brightness",
+        "color"
+      ],
+      "color": "#7b5cff",
+      "id": "living.tv",
+      "length": 1.5,
+      "name": "TV backlight",
+      "pos": [
+        0.13,
+        7.29
+      ],
+      "room": "living",
+      "rot": 90,
+      "type": "strip",
+      "y": 1.05
+    },
+    {
+      "capabilities": [
+        "brightness",
+        "temp"
+      ],
+      "id": "dining.pendant",
+      "name": "Pendant",
+      "pos": [
+        8.5,
+        7.4
+      ],
+      "room": "dining",
+      "type": "pendant",
+      "y": 1.75,
+      "color": ""
+    },
+    {
+      "capabilities": [
+        "brightness"
+      ],
+      "id": "kitchen.spots",
+      "name": "Spots",
+      "pos": [
+        8.4,
+        2.0
+      ],
+      "room": "kitchen",
+      "type": "spots",
+      "y": 0.8,
+      "color": ""
+    },
+    {
+      "capabilities": [
+        "brightness",
+        "temp"
+      ],
+      "id": "kitchen.strip",
+      "length": 2.9,
+      "name": "Counter light",
+      "pos": [
+        8.05,
+        0.42
+      ],
+      "room": "kitchen",
+      "type": "strip",
+      "y": 1.42,
+      "color": ""
+    },
+    {
+      "capabilities": [
+        "brightness",
+        "temp"
+      ],
+      "id": "bedroom.main",
+      "name": "Ceiling",
+      "pos": [
+        2.1,
+        2.3
+      ],
+      "room": "bedroom",
+      "type": "ceiling",
+      "y": 2.7,
+      "color": ""
+    },
+    {
+      "capabilities": [
+        "brightness"
+      ],
+      "id": "bath.main",
+      "name": "Ceiling",
+      "pos": [
+        5.2,
+        2.24
+      ],
+      "room": "bath",
+      "type": "ceiling",
+      "y": 2.7,
+      "color": ""
+    },
+    {
+      "capabilities": [
+
+      ],
+      "id": "living.light",
+      "name": "New light",
+      "pos": [
+        5.65,
+        17.75
+      ],
+      "room": "room8",
+      "type": "ceiling",
+      "y": 2.7,
+      "color": ""
+    },
+    {
+      "capabilities": [
+
+      ],
+      "id": "living.light2",
+      "name": "New light",
+      "pos": [
+        3.2,
+        14.25
+      ],
+      "room": "room6",
+      "type": "ceiling",
+      "y": 2.7,
+      "color": ""
+    },
+    {
+      "capabilities": [
+
+      ],
+      "id": "living.light3",
+      "name": "New light",
+      "pos": [
+        8.35,
+        11.25
+      ],
+      "room": "room4",
+      "type": "ceiling",
+      "y": 2.7,
+      "color": ""
+    },
+    {
+      "capabilities": [
+
+      ],
+      "id": "living.light4",
+      "name": "New light",
+      "pos": [
+        10.1,
+        15.05
+      ],
+      "room": "room7",
+      "type": "ceiling",
+      "y": 2.7,
+      "color": ""
+    },
+    {
+      "capabilities": [
+
+      ],
+      "id": "living.light5",
+      "name": "New light",
+      "pos": [
+        1.95,
+        -0.45
+      ],
+      "room": "room2",
+      "type": "ceiling",
+      "y": 2.7,
+      "color": ""
+    },
+    {
+      "capabilities": [
+
+      ],
+      "id": "living.light6",
+      "name": "New light",
+      "pos": [
+        8.5,
+        -0.25
+      ],
+      "room": "room",
+      "type": "ceiling",
+      "y": 2.7,
+      "color": ""
+    },
+    {
+      "capabilities": [
+
+      ],
+      "id": "living.light7",
+      "name": "New light",
+      "pos": [
+        3.2,
+        15.95
+      ],
+      "room": "room6",
+      "type": "ceiling",
+      "y": 2.7,
+      "color": ""
+    },
+    {
+      "capabilities": [
+
+      ],
+      "id": "living.light8",
+      "name": "New light",
+      "pos": [
+        3.4,
+        8.2
+      ],
+      "room": "living",
+      "type": "ceiling",
+      "y": 2.7,
+      "color": ""
+    }
+  ],
+  "acs": [
+    {
+      "id": "living.ac",
+      "name": "Living AC",
+      "pos": [
+        10.22,
+        9.7
+      ],
+      "room": "dining",
+      "wall": "east",
+      "y": 2.2
+    }
+  ]
+}

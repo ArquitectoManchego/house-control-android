@@ -19,7 +19,26 @@ module HouseControlSync
       val
     end
 
+    def self.export_json_string(model)
+      plan = build_plan_hash(model)
+      JSON.pretty_generate(plan)
+    end
+
     def self.export_file(model, filepath)
+      plan = build_plan_hash(model)
+      json_output = JSON.pretty_generate(plan)
+      File.write(filepath, json_output, encoding: 'UTF-8')
+
+      UI.messagebox("¡Plano exportado exitosamente para House Control!\n\n" +
+                    "Archivo: #{File.basename(filepath)}\n" +
+                    "• Habitaciones: #{plan['rooms'].size}\n" +
+                    "• Muebles: #{plan['furniture'].size}\n" +
+                    "• Luces: #{plan['lights'].size}\n" +
+                    "• Climas: #{plan['acs'].size}\n\n" +
+                    "Puedes transferir este archivo a tu celular e importarlo en la app House Control.")
+    end
+
+    def self.build_plan_hash(model)
       plan = {}
 
       # Metadatos generales del Modelo
@@ -175,17 +194,7 @@ module HouseControlSync
       plan['lights'] = lights
       plan['acs'] = acs
 
-      # Serializar JSON limpio
-      json_output = JSON.pretty_generate(plan)
-      File.write(filepath, json_output, encoding: 'UTF-8')
-
-      UI.messagebox("¡Plano exportado exitosamente para House Control!\n\n" +
-                    "Archivo: #{File.basename(filepath)}\n" +
-                    "• Habitaciones: #{plan['rooms'].size}\n" +
-                    "• Muebles: #{plan['furniture'].size}\n" +
-                    "• Luces: #{plan['lights'].size}\n" +
-                    "• Climas: #{plan['acs'].size}\n\n" +
-                    "Puedes transferir este archivo a tu celular e importarlo en la app House Control.")
+      plan
     end
 
     def self.find_all_relevant_entities(entities)

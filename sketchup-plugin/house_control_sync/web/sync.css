@@ -1,0 +1,351 @@
+:root {
+  --bg-app: #0e1219;
+  --bg-card: #161b24;
+  --bg-input: #11151f;
+  --border: rgba(255, 255, 255, 0.08);
+  --accent: #00e5ff;
+  --accent-blue: #0070f3;
+  --green: #10b981;
+  --red: #ef4444;
+  --text: #f0f3f8;
+  --text-muted: #8b95a5;
+  --radius: 8px;
+}
+
+* {
+  box-sizing: border-box;
+  margin: 0;
+  padding: 0;
+  user-select: none;
+  font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+}
+
+body {
+  background-color: var(--bg-app);
+  color: var(--text);
+  overflow: hidden;
+  height: 100vh;
+  width: 100vw;
+  font-size: 13px;
+}
+
+.sync-container {
+  display: flex;
+  flex-direction: column;
+  height: 100vh;
+  padding: 16px;
+  gap: 14px;
+}
+
+.sync-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  border-bottom: 1px solid var(--border);
+  padding-bottom: 12px;
+}
+
+.brand {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
+.icon-wrap {
+  width: 36px;
+  height: 36px;
+  background: linear-gradient(135deg, var(--accent) 0%, var(--accent-blue) 100%);
+  border-radius: var(--radius);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: #0b0f17;
+  box-shadow: 0 0 16px rgba(0, 229, 255, 0.4);
+}
+
+.icon-wrap svg {
+  width: 22px;
+  height: 22px;
+}
+
+.brand h2 {
+  font-size: 14px;
+  font-weight: 800;
+  letter-spacing: 0.8px;
+  color: #ffffff;
+}
+
+.brand .sub {
+  font-size: 10px;
+  color: var(--accent);
+  font-weight: 600;
+}
+
+.status-badge {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  background: rgba(16, 185, 129, 0.12);
+  border: 1px solid var(--green);
+  padding: 5px 12px;
+  border-radius: 20px;
+  color: var(--green);
+  font-size: 11px;
+  font-weight: 700;
+}
+
+.status-dot {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: var(--green);
+  box-shadow: 0 0 8px var(--green);
+  animation: pulse 1.8s infinite;
+}
+
+@keyframes pulse {
+  0% { transform: scale(0.9); opacity: 0.8; }
+  50% { transform: scale(1.3); opacity: 1; }
+  100% { transform: scale(0.9); opacity: 0.8; }
+}
+
+.sync-main {
+  display: grid;
+  grid-template-columns: 1.4fr 1fr;
+  gap: 14px;
+  flex: 1;
+  overflow: hidden;
+}
+
+.card {
+  background: var(--bg-card);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  padding: 16px;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.card h3 {
+  font-size: 13px;
+  font-weight: 700;
+  color: #ffffff;
+}
+
+.card .desc {
+  font-size: 11.5px;
+  color: var(--text-muted);
+  line-height: 1.4;
+}
+
+.input-group {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.input-group label {
+  font-size: 11px;
+  font-weight: 600;
+  color: var(--text-muted);
+}
+
+.input-row {
+  display: flex;
+  gap: 8px;
+}
+
+#phone-ip-input {
+  flex: 1;
+  background: var(--bg-input);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  padding: 0 12px;
+  color: #ffffff;
+  font-size: 13px;
+  outline: none;
+}
+
+#phone-ip-input:focus {
+  border-color: var(--accent);
+  box-shadow: 0 0 8px rgba(0, 229, 255, 0.25);
+}
+
+.btn-primary {
+  background: linear-gradient(135deg, #00c6ff 0%, #0072ff 100%);
+  border: none;
+  border-radius: var(--radius);
+  color: #ffffff;
+  padding: 8px 16px;
+  font-size: 12px;
+  font-weight: 700;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  box-shadow: 0 2px 10px rgba(0, 114, 255, 0.35);
+  transition: filter 0.15s;
+}
+
+.btn-primary:hover {
+  filter: brightness(1.15);
+}
+
+.btn-primary svg {
+  width: 14px;
+  height: 14px;
+}
+
+.server-info-box {
+  background: rgba(0, 0, 0, 0.25);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  padding: 10px 12px;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.info-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  font-size: 11.5px;
+}
+
+.info-row .label {
+  color: var(--text-muted);
+}
+
+.info-row .val {
+  font-family: monospace;
+  color: var(--accent);
+  font-weight: 600;
+}
+
+.btn-copy {
+  background: rgba(255, 255, 255, 0.08);
+  border: 1px solid var(--border);
+  border-radius: 4px;
+  color: var(--text);
+  font-size: 10px;
+  padding: 2px 8px;
+  cursor: pointer;
+  margin-left: 8px;
+}
+
+.btn-copy:hover {
+  background: rgba(255, 255, 255, 0.16);
+}
+
+.help-box {
+  background: rgba(0, 229, 255, 0.04);
+  border-left: 3px solid var(--accent);
+  border-radius: 4px;
+  padding: 10px 12px;
+  margin-top: auto;
+}
+
+.help-box h4 {
+  font-size: 11.5px;
+  color: var(--accent);
+  margin-bottom: 6px;
+}
+
+.help-box ol {
+  padding-left: 16px;
+  font-size: 11px;
+  color: var(--text-muted);
+  line-height: 1.5;
+}
+
+.qr-card {
+  align-items: center;
+  text-align: center;
+}
+
+.qr-wrapper {
+  background: #ffffff;
+  padding: 12px;
+  border-radius: var(--radius);
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 6px;
+  box-shadow: 0 4px 16px rgba(0, 0, 0, 0.5);
+  margin: auto 0;
+}
+
+.qr-caption {
+  font-size: 10px;
+  color: #1a202c;
+  font-family: monospace;
+  font-weight: 600;
+}
+
+.btn-secondary {
+  background: rgba(255, 255, 255, 0.06);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  color: var(--text-muted);
+  padding: 6px 14px;
+  font-size: 11px;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.btn-secondary svg {
+  width: 14px;
+  height: 14px;
+}
+
+.btn-secondary:hover {
+  background: rgba(255, 255, 255, 0.12);
+  color: #ffffff;
+}
+
+.sync-footer {
+  height: 110px;
+  background: #090c12;
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  padding: 8px 12px;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.log-header {
+  font-size: 10.5px;
+  font-weight: 700;
+  color: var(--text-muted);
+}
+
+.log-console {
+  flex: 1;
+  overflow-y: auto;
+  font-family: monospace;
+  font-size: 11px;
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+}
+
+.log-line {
+  color: #94a3b8;
+}
+
+.log-line.info {
+  color: var(--accent);
+}
+
+.log-line.success {
+  color: var(--green);
+}
+
+.log-line.error {
+  color: var(--red);
+}

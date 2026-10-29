@@ -19,6 +19,7 @@ import dev.housecontrol.android.core.ServiceDiscovery
 import dev.housecontrol.android.core.jsonOf
 import dev.housecontrol.android.core.readable
 import dev.housecontrol.android.core.string
+import dev.housecontrol.android.sync.SketchUpSync
 import dev.housecontrol.android.sync.SyncClient
 import dev.housecontrol.android.sync.SyncPairing
 import dev.housecontrol.android.sync.SyncState
@@ -42,7 +43,7 @@ data class Banner(val kind: Kind, val text: String, val id: Long = System.nanoTi
 
 /** Where the settings open, and the connection screens the editor opens over itself. */
 enum class Route {
-    Pairing, SmartLife, Shortcuts, HomeAssistant, Hue, Devices, CloudSync;
+    Pairing, SmartLife, Shortcuts, HomeAssistant, Hue, Devices, CloudSync, SketchUpSync;
 
     companion object {
         /** The screen a connection id of the web editor ("smartlife", "hue"…) stands for. */
@@ -80,6 +81,17 @@ class AppModel(private val context: Context) {
     val web = HomeWeb(context)
     val widgets = WidgetBridge(context, scope)
     val quickActions = QuickActions(context)
+    val sketchupSync by lazy {
+        SketchUpSync(context, scope) { planBytes ->
+            try {
+                val plan = PlanStore.validate(planBytes)
+                savePlan(plan)
+                show(Banner(Banner.Kind.Success, "📲 ¡Nuevo plano recibido en vivo desde SketchUp!"))
+            } catch (e: Exception) {
+                show(Banner(Banner.Kind.Error, "Error al procesar plano de SketchUp: ${e.readable}"))
+            }
+        }
+    }
 
     private var pollJob: Job? = null
     private var bannerJob: Job? = null
@@ -168,10 +180,12 @@ class AppModel(private val context: Context) {
         active = on
         if (on) {
             sync.start()
+            sketchupSync.startReceiver()
             startPolling()
             widgets.takeActions()
         } else {
             sync.stop()
+            sketchupSync.stopReceiver()
             pollJob?.cancel()
             pollJob = null
         }
@@ -404,6 +418,58 @@ class AppModel(private val context: Context) {
         val baseName = (plan.optString("name").ifEmpty { "Home" } + "-sketchup").replace(" ", "_")
         editorPending = null
         fileRequest = FileRequest.Export(PlanStore.encode(plan), baseName)
+    }
+
+    /** Exporta directamente a la PC que tiene abierto SketchUp mediante Wi-Fi local */
+    fun exportToSketchUp(pcIp: String, onDone: (Boolean, String) -> Unit) {
+        val plan = currentPlan
+        if (plan == null) {
+            val err = "No hay ningún plano activo para exportar"
+            show(Banner(Banner.Kind.Error, err))
+            onDone(false, err)
+            return
+        }
+        scope.launch {
+            val res = sketchupSync.exportToPc(pcIp, plan)
+            if (res.isSuccess) {
+                show(Banner(Banner.Kind.Success, "✅ Plano exportado exitosamente a SketchUp"))
+                onDone(true, res.getOrNull() ?: "Plano exportado")
+            } else {
+                val err = res.exceptionOrNull()?.message ?: "Error al exportar"
+                show(Banner(Banner.Kind.Error, "❌ $err"))
+                onDone(false, err)
+            }
+        }
+    }
+
+    /** Descarga e importa directamente el modelo activo en SketchUp en la PC */
+    fun importFromSketchUp(pcIp: String, onDone: (Boolean, String) -> Unit) {
+        scope.launch {
+            val res = sketchupSync.importFromPc(pcIp)
+            if (res.isSuccess) {
+                val planBytes = res.getOrNull()
+                if (planBytes != null) {
+                    try {
+                        val plan = PlanStore.validate(planBytes)
+                        savePlan(plan)
+                        show(Banner(Banner.Kind.Success, "✅ Plano importado exitosamente desde SketchUp"))
+                        onDone(true, "Plano importado con éxito")
+                    } catch (e: Exception) {
+                        val err = "Error de validación del plano: ${e.readable}"
+                        show(Banner(Banner.Kind.Error, err))
+                        onDone(false, err)
+                    }
+                } else {
+                    val err = "Respuesta vacía de SketchUp"
+                    show(Banner(Banner.Kind.Error, err))
+                    onDone(false, err)
+                }
+            } else {
+                val err = res.exceptionOrNull()?.message ?: "Error al importar"
+                show(Banner(Banner.Kind.Error, "❌ $err"))
+                onDone(false, err)
+            }
+        }
     }
 
     /** Guarda una copia local en Documents/HouseControl en la memoria accesible del teléfono */

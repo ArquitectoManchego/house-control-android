@@ -7,6 +7,10 @@ module HouseControlSync
   require_relative 'importer'
   require_relative 'exporter'
   require_relative 'catalog'
+  require_relative 'direct_sync'
+
+  # Iniciar servidor Wi-Fi local en segundo plano (puerto 8765)
+  DirectSync.start_server
 
   # Herramienta para suavizar / redondear aristas (Phong / Gouraud shading)
   def self.smooth_selection(smooth = true)
@@ -173,26 +177,44 @@ module HouseControlSync
     }
     cmd_catalog.tooltip = 'Catálogo 3D Lumion: Insertar mobiliario, iluminación, climas y materiales con 1 clic'
     cmd_catalog.status_bar_text = 'Abre la biblioteca interactiva 3D estilo Lumion para colocar objetos y aplicar materiales'
-    icon_16 = File.join(icons_dir, 'catalog_16.png')
-    icon_24 = File.join(icons_dir, 'catalog_24.png')
-    cmd_catalog.small_icon = icon_16 if File.exist?(icon_16)
-    cmd_catalog.large_icon = icon_24 if File.exist?(icon_24)
+    icon_cat_16 = File.join(icons_dir, 'catalog_16.png')
+    icon_cat_24 = File.join(icons_dir, 'catalog_24.png')
+    cmd_catalog.small_icon = icon_cat_16 if File.exist?(icon_cat_16)
+    cmd_catalog.large_icon = icon_cat_24 if File.exist?(icon_cat_24)
 
-    # 2. Importar Plano
+    # 2. Enviar directamente a Celular por Wi-Fi
+    cmd_send_to_phone = UI::Command.new('📲 Enviar Directo a Celular...') {
+      DirectSync.send_plan_to_phone
+    }
+    cmd_send_to_phone.tooltip = 'Exportar y enviar modelo 3D directamente a la app de tu celular por Wi-Fi'
+    cmd_send_to_phone.status_bar_text = 'Envía el plano 3D directamente a la app House Control en tu teléfono'
+    icon_sync_16 = File.join(icons_dir, 'sync_16.png')
+    icon_sync_24 = File.join(icons_dir, 'sync_24.png')
+    cmd_send_to_phone.small_icon = icon_sync_16 if File.exist?(icon_sync_16)
+    cmd_send_to_phone.large_icon = icon_sync_24 if File.exist?(icon_sync_24)
+
+    # 3. Ventana de Configuración de Sincronización Wi-Fi (QR y Servidor)
+    cmd_sync_dialog = UI::Command.new('⚙️ Sincronización Wi-Fi (QR y Servidor)...') {
+      DirectSync.show_sync_dialog
+    }
+    cmd_sync_dialog.tooltip = 'Ver estado del servidor Wi-Fi, IP de la PC y código QR para conectar con el celular'
+    cmd_sync_dialog.status_bar_text = 'Muestra la IP y QR de la PC para conectar con el celular'
+
+    # 4. Importar Plano desde Archivo
     cmd_import = UI::Command.new('Importar Plano House Control (*.json)...') {
       Importer.prompt_and_import(Sketchup.active_model)
     }
     cmd_import.tooltip = 'Importar plano JSON (Z corregido hacia arriba y muebles suavizados)'
     cmd_import.status_bar_text = 'Importa un archivo plan.json a SketchUp en coordenadas positivas'
 
-    # 3. Exportar Plano
+    # 5. Exportar Plano a Archivo
     cmd_export = UI::Command.new('Exportar a House Control (*.json)...') {
       Exporter.prompt_and_export(Sketchup.active_model)
     }
     cmd_export.tooltip = 'Exportar modelo 3D actual a formato plan.json de House Control'
     cmd_export.status_bar_text = 'Exporta el modelo actual manteniendo vinculaciones y materiales'
 
-    # 4. Herramientas de Aristas
+    # 6. Herramientas de Aristas
     cmd_smooth = UI::Command.new('Suavizar / Redondear Aristas...') {
       smooth_selection(true)
     }
@@ -203,7 +225,7 @@ module HouseControlSync
     }
     cmd_sharp.tooltip = 'Restaurar aristas rectas y vivas en el objeto seleccionado'
 
-    # 5. Convertidor e Inspector
+    # 7. Convertidor e Inspector
     cmd_convert = UI::Command.new('Convertir Selección a Objeto House Control...') {
       convert_selection_dialog
     }
@@ -221,6 +243,9 @@ module HouseControlSync
     # Menú desplegable
     hc_menu.add_item(cmd_catalog)
     hc_menu.add_separator
+    hc_menu.add_item(cmd_send_to_phone)
+    hc_menu.add_item(cmd_sync_dialog)
+    hc_menu.add_separator
     hc_menu.add_item(cmd_import)
     hc_menu.add_item(cmd_export)
     hc_menu.add_separator
@@ -235,6 +260,7 @@ module HouseControlSync
     # Barra de herramientas (Toolbar)
     tb = UI::Toolbar.new('House Control 3D')
     tb.add_item(cmd_catalog)
+    tb.add_item(cmd_send_to_phone)
     tb.add_separator
     tb.add_item(cmd_import)
     tb.add_item(cmd_export)
