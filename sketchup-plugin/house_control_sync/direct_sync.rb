@@ -35,6 +35,11 @@ module HouseControlSync
       @activity_log.shift if @activity_log.size > 50
       notify_ui_log(entry)
       puts "HouseControlSync: #{entry}" rescue nil
+      begin
+        log_path = File.join(File.dirname(__FILE__), 'sync_debug.log')
+        File.open(log_path, 'a') { |f| f.puts "#{Time.now} #{message}" }
+      rescue
+      end
     end
 
     def self.send_http_response(client, status_code, status_text, content_type, body_str)
@@ -138,13 +143,25 @@ module HouseControlSync
     end
 
     def self.start_server
-      return if @server && @server_status == :running
-
-      stop_server if @server
+      if @server && @server_status == :running
+        log("Servidor ya se encuentra activo en puerto #{PORT}")
+        return
+      end
 
       begin
         log("Iniciando servidor de sincronización en puerto #{PORT}...")
-        @server = TCPServer.new('0.0.0.0', PORT)
+        
+        @server = begin
+          s = TCPServer.new('0.0.0.0', PORT)
+          s.setsockopt(Socket::SOL_SOCKET, Socket::SO_REUSEADDR, true) rescue nil
+          s
+        rescue => err1
+          log("TCPServer '0.0.0.0' error (#{err1.message}), reintentando...")
+          s2 = TCPServer.new(PORT)
+          s2.setsockopt(Socket::SOL_SOCKET, Socket::SO_REUSEADDR, true) rescue nil
+          s2
+        end
+
         @server_status = :running
         log("🟢 Servidor Wi-Fi activo en http://#{local_ip}:#{PORT}")
 
@@ -162,7 +179,7 @@ module HouseControlSync
         end
       rescue => e
         @server_status = :error
-        log("❌ Error al iniciar servidor: #{e.message}")
+        log("❌ Error fatal al iniciar servidor: #{e.message}")
       end
     end
 

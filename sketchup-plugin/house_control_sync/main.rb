@@ -9,9 +9,6 @@ module HouseControlSync
   require_relative 'catalog'
   require_relative 'direct_sync'
 
-  # Iniciar servidor Wi-Fi local en segundo plano (puerto 8765)
-  DirectSync.start_server
-
   # Herramienta para suavizar / redondear aristas (Phong / Gouraud shading)
   def self.smooth_selection(smooth = true)
     model = Sketchup.active_model
@@ -270,6 +267,9 @@ module HouseControlSync
     tb.add_item(cmd_inspect)
     tb.restore
 
-    file_loaded?(__FILE__)
+    # Iniciar servidor Wi-Fi local en segundo plano (puerto 8765)
+    DirectSync.start_server
+
+    file_loaded(__FILE__)
   end
 end
