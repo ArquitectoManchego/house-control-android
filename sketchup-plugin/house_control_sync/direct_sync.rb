@@ -1,6 +1,5 @@
 # encoding: UTF-8
 require 'socket'
-require 'webrick'
 require 'net/http'
 require 'uri'
 require 'json'
@@ -35,85 +34,132 @@ module HouseControlSync
       @activity_log << entry
       @activity_log.shift if @activity_log.size > 50
       notify_ui_log(entry)
+      puts "HouseControlSync: #{entry}" rescue nil
     end
 
-    def self.add_cors_headers(res)
-      res['Access-Control-Allow-Origin'] = '*'
-      res['Access-Control-Allow-Methods'] = 'GET, POST, OPTIONS'
-      res['Access-Control-Allow-Headers'] = 'Content-Type, Authorization'
+    def self.send_http_response(client, status_code, status_text, content_type, body_str)
+      headers = [
+        "HTTP/1.1 #{status_code} #{status_text}",
+        "Content-Type: #{content_type}; charset=utf-8",
+        "Content-Length: #{body_str.bytesize}",
+        "Access-Control-Allow-Origin: *",
+        "Access-Control-Allow-Methods: GET, POST, OPTIONS",
+        "Access-Control-Allow-Headers: Content-Type, Authorization",
+        "Connection: close",
+        "\r\n"
+      ].join("\r\n")
+
+      client.write(headers)
+      client.write(body_str)
+      client.flush
+    rescue => e
+      # Ignorar si el cliente cerró el socket
+    end
+
+    def self.handle_client(client)
+      client.setsockopt(Socket::SOL_SOCKET, Socket::SO_RCVTIMEO, [5, 0].pack('l_2')) rescue nil
+
+      request_line = client.gets
+      return unless request_line
+
+      parts = request_line.strip.split(/\s+/)
+      return unless parts.size >= 2
+      method = parts[0].upcase
+      path = parts[1]
+
+      headers = {}
+      while (line = client.gets)
+        line = line.strip
+        break if line.empty?
+        k, v = line.split(/:\s*/, 2)
+        headers[k.downcase] = v if k && v
+      end
+
+      # Handle CORS Preflight
+      if method == 'OPTIONS'
+        send_http_response(client, 200, 'OK', 'application/json', '{"ok":true}')
+        return
+      end
+
+      clean_path = path.split('?').first
+
+      case clean_path
+      when '/', '/status'
+        model = Sketchup.active_model
+        model_name = (model && !model.title.empty?) ? model.title : 'Casa House Control'
+        res_json = {
+          status: 'online',
+          app: 'HouseControl SketchUp Sync',
+          version: '1.2.0',
+          pc_ip: local_ip,
+          model_name: model_name
+        }.to_json
+        send_http_response(client, 200, 'OK', 'application/json', res_json)
+
+      when '/api/plan.json'
+        client_ip = client.peeraddr[3] rescue 'unknown'
+        @last_phone_ip = client_ip
+        Sketchup.write_default('HouseControl', 'last_phone_ip', client_ip) rescue nil
+        log("📱 Celular conectado desde #{client_ip} solicitando plano 3D...")
+
+        model = Sketchup.active_model
+        plan_json = Exporter.export_json_string(model)
+        send_http_response(client, 200, 'OK', 'application/json', plan_json)
+        log("✓ Plano 3D enviado exitosamente al celular (#{client_ip})")
+
+      when '/api/sync_plan', '/api/receive_plan'
+        content_length = headers['content-length'].to_i
+        body = ''
+        if content_length > 0
+          body = client.read(content_length) || ''
+        end
+
+        client_ip = client.peeraddr[3] rescue 'unknown'
+        @last_phone_ip = client_ip
+        Sketchup.write_default('HouseControl', 'last_phone_ip', client_ip) rescue nil
+        log("📥 Recibiendo plano 3D enviado desde celular (#{client_ip})...")
+
+        # Programar importación segura en el hilo principal de SketchUp
+        UI.start_timer(0, false) do
+          model = Sketchup.active_model
+          success = Importer.import_json_string(model, body, "Celular (#{client_ip})", true)
+          log(success ? "✓ Plano importado y actualizado en SketchUp" : "❌ Error al interpretar plano recibido")
+        end
+
+        send_http_response(client, 200, 'OK', 'application/json', '{"ok":true,"message":"Plano recibido e importado en SketchUp con éxito"}')
+
+      else
+        send_http_response(client, 404, 'Not Found', 'text/plain', 'Not Found')
+      end
+    rescue => e
+      log("Error en conexión: #{e.message}")
+    ensure
+      client.close rescue nil
     end
 
     def self.start_server
       return if @server && @server_status == :running
 
+      stop_server if @server
+
       begin
         log("Iniciando servidor de sincronización en puerto #{PORT}...")
-        @server = WEBrick::HTTPServer.new(
-          Port: PORT,
-          BindAddress: '0.0.0.0',
-          Logger: WEBrick::Log.new(nil, WEBrick::BasicLog::WARN),
-          AccessLog: []
-        )
-
-        # GET / o /status
-        @server.mount_proc '/' do |_req, res|
-          add_cors_headers(res)
-          res['Content-Type'] = 'application/json'
-          model = Sketchup.active_model
-          model_name = (model && !model.title.empty?) ? model.title : 'Casa House Control'
-          res.body = {
-            status: 'online',
-            app: 'HouseControl SketchUp Sync',
-            version: '1.2.0',
-            pc_ip: local_ip,
-            model_name: model_name
-          }.to_json
-        end
-
-        # GET /api/plan.json - El celular descarga el plano actual de SketchUp
-        @server.mount_proc '/api/plan.json' do |req, res|
-          add_cors_headers(res)
-          client_ip = req.peeraddr[3]
-          @last_phone_ip = client_ip
-          Sketchup.write_default('HouseControl', 'last_phone_ip', client_ip)
-          log("📱 Celular conectado desde #{client_ip} solicitando plano 3D...")
-
-          model = Sketchup.active_model
-          plan_json = Exporter.export_json_string(model)
-
-          res['Content-Type'] = 'application/json'
-          res.body = plan_json
-          log("✓ Plano 3D enviado exitosamente al celular (#{client_ip})")
-        end
-
-        # POST /api/sync_plan o /api/upload_plan - El celular envía su plano a SketchUp
-        @server.mount_proc '/api/sync_plan' do |req, res|
-          add_cors_headers(res)
-          if req.request_method == 'OPTIONS'
-            res.status = 200
-            next
-          end
-
-          client_ip = req.peeraddr[3]
-          @last_phone_ip = client_ip
-          Sketchup.write_default('HouseControl', 'last_phone_ip', client_ip)
-          body = req.body.to_s
-          log("📥 Recibiendo plano 3D enviado desde celular (#{client_ip})...")
-
-          # Ejecutar en el hilo principal de SketchUp de forma 100% segura
-          UI.start_timer(0, false) do
-            model = Sketchup.active_model
-            success = Importer.import_json_string(model, body, "Celular (#{client_ip})", true)
-            log(success ? "✓ Plano importado y actualizado en SketchUp" : "❌ Error al interpretar plano recibido")
-          end
-
-          res['Content-Type'] = 'application/json'
-          res.body = { ok: true, message: 'Plano recibido e importado en SketchUp con éxito' }.to_json
-        end
-
-        @server_thread = Thread.new { @server.start }
+        @server = TCPServer.new('0.0.0.0', PORT)
         @server_status = :running
         log("🟢 Servidor Wi-Fi activo en http://#{local_ip}:#{PORT}")
+
+        @server_thread = Thread.new do
+          while @server_status == :running && @server && !@server.closed?
+            begin
+              client = @server.accept
+              Thread.new(client) do |c|
+                handle_client(c)
+              end
+            rescue => e
+              break if @server.nil? || @server.closed?
+            end
+          end
+        end
       rescue => e
         @server_status = :error
         log("❌ Error al iniciar servidor: #{e.message}")
@@ -121,11 +167,11 @@ module HouseControlSync
     end
 
     def self.stop_server
+      log("Deteniendo servidor de sincronización...")
+      @server_status = :stopped
       if @server
-        log("Deteniendo servidor de sincronización...")
-        @server.shutdown rescue nil
+        @server.close rescue nil
         @server = nil
-        @server_status = :stopped
       end
       if @server_thread
         @server_thread.kill rescue nil
@@ -140,7 +186,6 @@ module HouseControlSync
       ip = target_ip || @last_phone_ip || Sketchup.read_default('HouseControl', 'last_phone_ip', '')
 
       if ip.nil? || ip.empty? || ip == '127.0.0.1'
-        # Pedir IP o abrir ventana de sincronización
         show_sync_dialog
         return
       end

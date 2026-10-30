@@ -8,15 +8,19 @@ require 'sketchup.rb'
 require 'extensions.rb'
 
 module HouseControlSync
-  unless file_loaded?(__FILE__)
-    loader_path = File.join(File.dirname(__FILE__), 'house_control_sync', 'main.rb')
-    extension = SketchupExtension.new('House Control 3D Sync', loader_path)
-    extension.description = 'Importa y exporta planos 3D compatibles con la app House Control manteniendo todos los datos e integraciones de luces, climas y muebles.'
-    extension.version     = '1.0.0'
-    extension.copyright   = '2026 ArquitectoManchego & Antigravity'
-    extension.creator     = 'Alex (ArquitectoManchego)'
+  loader_path = File.join(File.dirname(__FILE__), 'house_control_sync', 'main.rb')
+  extension = SketchupExtension.new('House Control 3D Sync', loader_path)
+  extension.description = 'Importa y exporta planos 3D compatibles con la app House Control manteniendo todos los datos e integraciones de luces, climas y muebles.'
+  extension.version     = '1.2.0'
+  extension.copyright   = '2026 ArquitectoManchego & Antigravity'
+  extension.creator     = 'Alex (ArquitectoManchego)'
 
-    Sketchup.register_extension(extension, true)
-    file_loaded?(__FILE__)
+  Sketchup.register_extension(extension, true)
+
+  # Carga directa garantizada para levantar servidor Wi-Fi y barra de herramientas
+  begin
+    load loader_path
+  rescue => err
+    puts "HouseControlSync: Error al cargar extension: #{err.message}\n#{err.backtrace.join("\n") rescue ''}"
   end
 end
