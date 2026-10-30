@@ -15,6 +15,8 @@ module HouseControlSync
     @last_phone_ip = nil
     @dialog = nil
     @activity_log = []
+    @sync_queue = []
+    @poll_timer_id = nil
 
     def self.local_ip
       orig = Socket.do_not_reverse_lookup
@@ -122,16 +124,22 @@ module HouseControlSync
         client_ip = client.peeraddr[3] rescue 'unknown'
         @last_phone_ip = client_ip
         Sketchup.write_default('HouseControl', 'last_phone_ip', client_ip) rescue nil
-        log("📥 Recibiendo plano 3D enviado desde celular (#{client_ip})...")
+        log("📥 Recibiendo plano 3D enviado desde celular (#{client_ip}) [#{body.bytesize} bytes]...")
 
-        # Programar importación segura en el hilo principal de SketchUp
-        UI.start_timer(0, false) do
-          model = Sketchup.active_model
-          success = Importer.import_json_string(model, body, "Celular (#{client_ip})", true)
-          log(success ? "✓ Plano importado y actualizado en SketchUp" : "❌ Error al interpretar plano recibido")
+        # Guardar copia de respaldo inmediata en disco
+        begin
+          backup_path = File.join(File.dirname(__FILE__), 'ultimo_plano_recibido.json')
+          File.open(backup_path, 'w:UTF-8') { |f| f.write(body) }
+          log("💾 Respaldo guardado: #{File.basename(backup_path)}")
+        rescue => err_b
+          log("Aviso: no se pudo guardar copia en disco: #{err_b.message}")
         end
 
-        send_http_response(client, 200, 'OK', 'application/json', '{"ok":true,"message":"Plano recibido e importado en SketchUp con éxito"}')
+        # Encolar para procesamiento en el hilo principal de SketchUp
+        @sync_queue ||= []
+        @sync_queue << { body: body, source: "Celular (#{client_ip})" }
+
+        send_http_response(client, 200, 'OK', 'application/json', '{"ok":true,"message":"Plano recibido y listo para dibujar en SketchUp"}')
 
       else
         send_http_response(client, 404, 'Not Found', 'text/plain', 'Not Found')
@@ -193,6 +201,57 @@ module HouseControlSync
       if @server_thread
         @server_thread.kill rescue nil
         @server_thread = nil
+      end
+    end
+
+    def self.start_main_thread_loop
+      return if @poll_timer_id
+      log("Iniciando despachador del hilo principal de SketchUp...")
+      @poll_timer_id = UI.start_timer(0.2, true) do
+        process_sync_queue
+      end
+    end
+
+    def self.process_sync_queue
+      return if @sync_queue.nil? || @sync_queue.empty?
+
+      item = @sync_queue.shift
+      return unless item
+
+      log("🎨 Dibujando plano 3D en la pantalla de SketchUp...")
+      begin
+        model = Sketchup.active_model
+        if model.nil?
+          log("❌ Error: No hay modelo activo abierto en SketchUp")
+          return
+        end
+
+        success = Importer.import_json_string(model, item[:body], item[:source], false)
+        if success
+          model.active_view.zoom_extents rescue nil
+          log("✓ ¡Plano 3D importado y enfocado en pantalla con éxito!")
+          UI.messagebox("📲 ¡Plano 3D recibido desde tu celular e importado con éxito en SketchUp!\n\nSe ha centrado la cámara en el modelo.")
+        else
+          log("❌ Error al interpretar el plano recibido")
+        end
+      rescue => e
+        log("❌ Excepción al importar plano: #{e.message}")
+      end
+    end
+
+    def self.import_last_received_plan
+      backup_path = File.join(File.dirname(__FILE__), 'ultimo_plano_recibido.json')
+      unless File.exist?(backup_path)
+        UI.messagebox("Aún no se ha recibido ningún plano desde el celular.")
+        return
+      end
+
+      body = File.read(backup_path, encoding: 'UTF-8')
+      model = Sketchup.active_model
+      success = Importer.import_json_string(model, body, "Último plano recibido", true)
+      if success
+        model.active_view.zoom_extents rescue nil
+        UI.messagebox("¡Plano importado y centrado en pantalla!")
       end
     end
 

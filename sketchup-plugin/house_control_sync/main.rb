@@ -237,11 +237,18 @@ module HouseControlSync
       open_samples_folder
     }
 
+    # 3b. Importar último plano recibido
+    cmd_import_last = UI::Command.new('📥 Dibujar Último Plano Recibido del Celular') {
+      DirectSync.import_last_received_plan
+    }
+    cmd_import_last.tooltip = 'Dibuja en pantalla el último plano transferido desde el celular'
+
     # Menú desplegable
     hc_menu.add_item(cmd_catalog)
     hc_menu.add_separator
     hc_menu.add_item(cmd_send_to_phone)
     hc_menu.add_item(cmd_sync_dialog)
+    hc_menu.add_item(cmd_import_last)
     hc_menu.add_separator
     hc_menu.add_item(cmd_import)
     hc_menu.add_item(cmd_export)
@@ -267,8 +274,9 @@ module HouseControlSync
     tb.add_item(cmd_inspect)
     tb.restore
 
-    # Iniciar servidor Wi-Fi local en segundo plano (puerto 8765)
+    # Iniciar servidor Wi-Fi local y bucle del hilo principal
     DirectSync.start_server
+    DirectSync.start_main_thread_loop
 
     file_loaded(__FILE__)
   end
